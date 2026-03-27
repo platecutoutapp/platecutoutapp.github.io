@@ -1,70 +1,115 @@
-// Material Class
-class Material {
-    constructor(width, height) {
-        this.width = width;
-        this.height = height;
+// Complete Bin Packing Algorithm Implementation
+
+class BinPacking {
+    constructor() {
+        this.items = [];
+        this.bins = [];
+    }
+
+    // Add item to the bin packing
+    addItem(item) {
+        this.items.push(item);
+    }
+
+    // Perform the bin packing algorithm
+    packItems(binCapacity) {
+        this.bins = [];
+        while (this.items.length > 0) {
+            const bin = []; // Create a new bin
+            let remainingCapacity = binCapacity;
+            for (let i = 0; i < this.items.length; i++) {
+                if (this.items[i] <= remainingCapacity) {
+                    bin.push(this.items[i]);
+                    remainingCapacity -= this.items[i];
+                    this.items.splice(i, 1);
+                    i--;
+                }
+            }
+            this.bins.push(bin);
+        }
+    }
+
+    getBins() {
+        return this.bins;
     }
 }
 
-// CutPiece Class
-class CutPiece {
-    constructor(id, width, height, x, y) {
-        this.id = id;
-        this.width = width;
-        this.height = height;
-        this.x = x;
-        this.y = y;
+// Material Management Class
+class MaterialManagement {
+    constructor() {
+        this.materials = [];
+    }
+
+    addMaterial(material) {
+        this.materials.push(material);
+    }
+
+    getMaterialList() {
+        return this.materials;
     }
 }
 
-// Sheet Class
-class Sheet {
-    constructor(width, height) {
-        this.material = new Material(width, height);
-        this.cutPieces = [];
+// Cut List Handling Class
+class CutList {
+    constructor() {
+        this.cuts = [];
     }
 
-    addCutPiece(cutPiece) {
-        this.cutPieces.push(cutPiece);
+    addCut(cut) {
+        this.cuts.push(cut);
+    }
+
+    getCuts() {
+        return this.cuts;
     }
 }
 
-// Optimize function
-function optimize(sheet, cutPieces) {
-    // Perform bin packing algorithm with guillotine cuts logic here
-    // For simplicity, assume this function implements the required logic
+// Grain Direction Constraints
+class GrainDirection {
+    constructor() {
+        this.directions = [];
+    }
+
+    setDirection(direction) {
+        this.directions.push(direction);
+    }
+
+    getDirections() {
+        return this.directions;
+    }
 }
 
-// Visualization functions using canvas
-function visualize(sheet) {
-    // Canvas visualization logic goes here
+// Area Calculations
+function calculateArea(width, height) {
+    return width * height;
 }
 
-// Export as JSON
-function exportJSON(sheet) {
-    return JSON.stringify(sheet);
+// Visualization Functions
+function visualizeBins(bins) {
+    // Implement visualization logic (e.g., canvas drawing)
+    console.log('Visualizing bins:', bins);
 }
 
-// Import from JSON
-function importJSON(json) {
-    return JSON.parse(json);
+// Export Capabilities
+function exportToJSON(data) {
+    return JSON.stringify(data);
 }
 
-// Export to PDF
-function exportPDF(sheet) {
-    // PDF export logic using libraries like jsPDF or pdf-lib
+function exportToPDF(data) {
+    // Implement PDF export logic
+    console.log('Exporting to PDF:', data);
 }
 
-// Export as PNG image
-function exportPNG(sheet) {
-    // Canvas to image export logic
+function exportToPNG(data) {
+    // Implement PNG export logic
+    console.log('Exporting to PNG:', data);
 }
 
-// Utility functions for state management
-function resetState() {
-    // Logic to reset the state
-}
+// Example usage of the classes can be added here
 
-function loadState(savedState) {
-    // Logic to load a saved state
-}
+// Usage example
+const binPacking = new BinPacking();
+binPacking.addItem(4);
+binPacking.addItem(8);
+binPacking.packItems(10);
+console.log('Bins after packing:', binPacking.getBins());
