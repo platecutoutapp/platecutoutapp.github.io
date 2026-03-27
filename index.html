@@ -324,4 +324,325 @@
 </button>
 </div>
 </main>
+        <script>
+/* =========================
+   DATA MODEL
+========================= */
+const state = {
+    sheets: [],
+    cuts: [],
+    results: null
+};
+
+/* =========================
+   UI HELPERS
+========================= */
+function getSheetCards() {
+    return document.querySelectorAll("section");
+}
+
+function readSheetsFromUI() {
+    const cards = getSheetCards();
+    const sheets = [];
+
+    cards.forEach(card => {
+        const inputs = card.querySelectorAll("input");
+
+        const name = inputs[0]?.value || "Unnamed";
+        const length = parseFloat(inputs[1]?.value || 0);
+        const width = parseFloat(inputs[2]?.value || 0);
+        const quantity = parseInt(inputs[3]?.value || 0);
+        const grain = card.querySelector("input[type=checkbox]")?.checked ?? true;
+
+        sheets.push({ name, length, width, quantity, grain });
+    });
+
+    state.sheets = sheets;
+}
+
+/* =========================
+   GEOMETRY
+========================= */
+function rectArea(w, h) {
+    return w * h;
+}
+
+function triangleArea(w, h) {
+    return (w * h) / 2;
+}
+
+function truncatedTriangleArea(w, h, cutH) {
+    return ((h + cutH) / 2) * w;
+}
+
+/* =========================
+   CUT NORMALIZATION
+========================= */
+function normalizeCuts() {
+    let list = [];
+
+    state.cuts.forEach(cut => {
+        for (let i = 0; i < cut.qty; i++) {
+            list.push({...cut});
+        }
+    });
+
+    // größte zuerst → bessere Packung
+    list.sort((a, b) => getArea(b) - getArea(a));
+
+    return list;
+}
+
+function getArea(cut) {
+    if (cut.type === "rect") return rectArea(cut.w, cut.h);
+    if (cut.type === "tri") return triangleArea(cut.w, cut.h);
+    if (cut.type === "tri_cut") return truncatedTriangleArea(cut.w, cut.h, cut.cutH);
+    return 0;
+}
+
+/* =========================
+   SIMPLE BIN PACKING (2D)
+========================= */
+function packCuts() {
+    const sheets = state.sheets;
+    const cuts = normalizeCuts();
+
+    let usedSheets = [];
+    let remainingCuts = [...cuts];
+
+    sheets.forEach(sheet => {
+        for (let q = 0; q < sheet.quantity; q++) {
+            if (remainingCuts.length === 0) break;
+
+            let freeRects = [{
+                x: 0,
+                y: 0,
+                w: sheet.length,
+                h: sheet.width
+            }];
+
+            let placed = [];
+
+            remainingCuts = remainingCuts.filter(cut => {
+                for (let i = 0; i < freeRects.length; i++) {
+                    let fr = freeRects[i];
+
+                    let fits = tryPlace(cut, fr, sheet.grain);
+
+                    if (fits) {
+                        placed.push({...cut, x: fr.x, y: fr.y});
+
+                        // split free space
+                        freeRects.splice(i, 1);
+                        freeRects.push(
+                            { x: fr.x + fits.w, y: fr.y, w: fr.w - fits.w, h: fits.h },
+                            { x: fr.x, y: fr.y + fits.h, w: fr.w, h: fr.h - fits.h }
+                        );
+
+                        return false; // entfernt aus Liste
+                    }
+                }
+                return true;
+            });
+
+            if (placed.length > 0) {
+                usedSheets.push({
+                    sheet,
+                    placements: placed
+                });
+            }
+        }
+    });
+
+    return usedSheets;
+}
+
+function tryPlace(cut, freeRect, grain) {
+    let orientations = [
+        { w: cut.w, h: cut.h }
+    ];
+
+    // Rotation nur wenn KEINE Maserung
+    if (!grain) {
+        orientations.push({ w: cut.h, h: cut.w });
+    }
+
+    for (let o of orientations) {
+        if (o.w <= freeRect.w && o.h <= freeRect.h) {
+            return o;
+        }
+    }
+
+    return null;
+}
+
+/* =========================
+   CALCULATION
+========================= */
+function calculate() {
+    readSheetsFromUI();
+
+    const packed = packCuts();
+
+    let totalSheetArea = 0;
+    let usedArea = 0;
+
+    packed.forEach(s => {
+        const a = s.sheet.length * s.sheet.width;
+        totalSheetArea += a;
+
+        s.placements.forEach(p => {
+            usedArea += getArea(p);
+        });
+    });
+
+    const waste = totalSheetArea - usedArea;
+
+    state.results = {
+        sheetsUsed: packed.length,
+        totalArea: totalSheetArea / 1e6,
+        usedArea: usedArea / 1e6,
+        waste: waste / 1e6,
+        wastePercent: totalSheetArea > 0 ? (waste / totalSheetArea) * 100 : 0,
+        packed
+    };
+
+    updateSummary();
+    drawPreview();
+}
+
+/* =========================
+   SUMMARY UI UPDATE
+========================= */
+function updateSummary() {
+    if (!state.results) return;
+
+    const el = document.querySelector(".text-4xl");
+    if (el) el.textContent = state.results.sheetsUsed;
+
+    const areaEl = document.querySelector(".border-t span:last-child");
+    if (areaEl) {
+        areaEl.textContent = state.results.totalArea.toFixed(2) + " m²";
+    }
+}
+
+/* =========================
+   CANVAS DRAW
+========================= */
+function drawPreview() {
+    let canvas = document.getElementById("preview");
+    if (!canvas) {
+        canvas = document.createElement("canvas");
+        canvas.id = "preview";
+        canvas.width = 600;
+        canvas.height = 400;
+        canvas.className = "mt-6 border";
+        document.querySelector(".p-8").appendChild(canvas);
+    }
+
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (!state.results) return;
+
+    let offsetX = 10;
+
+    state.results.packed.forEach(sheet => {
+        const scale = 0.1;
+
+        ctx.strokeRect(offsetX, 10,
+            sheet.sheet.length * scale,
+            sheet.sheet.width * scale
+        );
+
+        sheet.placements.forEach(p => {
+            ctx.fillRect(
+                offsetX + p.x * scale,
+                10 + p.y * scale,
+                p.w * scale,
+                p.h * scale
+            );
+        });
+
+        offsetX += sheet.sheet.length * scale + 20;
+    });
+}
+
+/* =========================
+   IMPORT / EXPORT
+========================= */
+function exportJSON() {
+    const data = JSON.stringify(state, null, 2);
+    download(data, "cutlist.json", "application/json");
+}
+
+function importJSON(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+        Object.assign(state, JSON.parse(e.target.result));
+    };
+    reader.readAsText(file);
+}
+
+function download(content, name, type) {
+    const blob = new Blob([content], { type });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+}
+
+/* =========================
+   EXPORT IMAGE
+========================= */
+function exportImage() {
+    const canvas = document.getElementById("preview");
+    if (!canvas) return;
+
+    const link = document.createElement("a");
+    link.download = "result.png";
+    link.href = canvas.toDataURL();
+    link.click();
+}
+
+/* =========================
+   EXPORT PDF
+========================= */
+function exportPDF() {
+    const canvas = document.getElementById("preview");
+    if (!canvas) return;
+
+    const img = canvas.toDataURL("image/png");
+
+    const win = window.open("");
+    win.document.write(`<img src="${img}" style="width:100%">`);
+    win.print();
+}
+
+/* =========================
+   EVENT BINDING
+========================= */
+document.addEventListener("DOMContentLoaded", () => {
+
+    // Optimize Button
+    document.querySelector("header button.bg-primary")
+        ?.addEventListener("click", calculate);
+
+    // Add Sheet
+    document.querySelector(".border-dashed")
+        ?.addEventListener("click", () => {
+            alert("UI-Duplikation hier ergänzen");
+        });
+
+    // New Calculation
+    document.querySelector("aside button")
+        ?.addEventListener("click", () => {
+            state.sheets = [];
+            state.cuts = [];
+            state.results = null;
+            location.reload();
+        });
+
+});
+                          </script>
 </body></html>
