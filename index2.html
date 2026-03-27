@@ -1,0 +1,202 @@
+<!DOCTYPE html><html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OptiCut Pro Advanced</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas"></script>
+</head><body class="bg-gray-100 p-6"><h1 class="text-2xl font-bold mb-6">OptiCut Pro – Advanced</h1><!-- MATERIAL UI --><div class="bg-white p-4 rounded shadow mb-6">
+<h2 class="font-bold mb-3">Material</h2>
+<div class="flex gap-2 flex-wrap">
+<input id="matName" placeholder="Name" class="border p-2">
+<input id="matL" type="number" placeholder="Länge mm" class="border p-2">
+<input id="matW" type="number" placeholder="Breite mm" class="border p-2">
+<input id="matQ" type="number" placeholder="Anzahl" class="border p-2">
+<label class="flex items-center gap-1"><input id="matGrain" type="checkbox"> Maserung (nur 180°)</label>
+<button onclick="addMaterial()" class="bg-blue-600 text-white px-4">Add</button>
+</div>
+<ul id="materials" class="mt-3"></ul>
+</div><!-- CUT LIST --><div class="bg-white p-4 rounded shadow mb-6">
+<h2 class="font-bold mb-3">Zuschnittliste</h2>
+<div class="flex gap-2 flex-wrap">
+<select id="cutType" class="border p-2">
+<option value="rect">Rechteck</option>
+<option value="tri">Dreieck</option>
+<option value="trap">Trapez</option>
+</select>
+<input id="cutW" type="number" placeholder="Länge" class="border p-2">
+<input id="cutH" type="number" placeholder="Höhe" class="border p-2">
+<input id="cutCH" type="number" placeholder="Abschnitt" class="border p-2">
+<input id="cutQ" type="number" placeholder="Anzahl" class="border p-2">
+<button onclick="addCut()" class="bg-green-600 text-white px-4">Add</button>
+</div>
+<ul id="cuts" class="mt-3"></ul>
+</div><!-- ACTIONS --><div class="mb-6">
+<button onclick="optimize()" class="bg-purple-700 text-white px-4 py-2 mr-2">Optimieren</button>
+<button onclick="exportJSON()" class="bg-gray-600 text-white px-4 py-2 mr-2">Export JSON</button>
+<input type="file" onchange="importJSON(this.files[0])" class="mr-2">
+<button onclick="exportPDF()" class="bg-red-600 text-white px-4 py-2">Export PDF</button>
+</div><!-- RESULT --><div id="result" class="bg-white p-4 rounded shadow mb-6"></div>
+<div id="canvasContainer" class="grid grid-cols-2 gap-4"></div><script>
+let appState = { materials: [], cuts: [] };
+
+function addMaterial(){
+    appState.materials.push({
+        name: matName.value,
+        length: +matL.value,
+        width: +matW.value,
+        qty: +matQ.value,
+        grain: matGrain.checked
+    });
+    render();
+}
+
+function addCut(){
+    appState.cuts.push({
+        type: cutType.value,
+        w: +cutW.value,
+        h: +cutH.value,
+        cutH: +cutCH.value || 0,
+        qty: +cutQ.value
+    });
+    render();
+}
+
+function render(){
+    materials.innerHTML = appState.materials.map(m=>
+        `<li>${m.name} ${m.length}x${m.width} (${m.qty}) ${m.grain?'[Maserung]':''}</li>`).join('');
+
+    cuts.innerHTML = appState.cuts.map(c=>
+        `<li>${c.type} ${c.w}x${c.h} (${c.qty})</li>`).join('');
+}
+
+function areaRect(w,h){return w*h}
+function areaTri(w,h){return w*h/2}
+function areaTrap(w,h,ch){return w*(h+ch)/2}
+
+function cutArea(c){
+    if(c.type==='rect') return areaRect(c.w,c.h);
+    if(c.type==='tri') return areaTri(c.w,c.h);
+    return areaTrap(c.w,c.h,c.cutH);
+}
+
+function getOrientations(cut, grain){
+    if(grain){
+        return [{w:cut.w,h:cut.h}]; // only 180° (same)
+    } else {
+        return [
+            {w:cut.w,h:cut.h},
+            {w:cut.h,h:cut.w}
+        ];
+    }
+}
+
+function optimize(){
+    let cutsExpanded=[];
+    appState.cuts.forEach(c=>{
+        for(let i=0;i<c.qty;i++) cutsExpanded.push({...c});
+    });
+
+    cutsExpanded.sort((a,b)=>cutArea(b)-cutArea(a));
+
+    let sheets=[];
+
+    appState.materials.forEach(m=>{
+        for(let i=0;i<m.qty;i++){
+            sheets.push({
+                m,
+                free:[{x:0,y:0,w:m.length,h:m.width}],
+                used:[]
+            });
+        }
+    });
+
+    cutsExpanded.forEach(cut=>{
+        outer:
+        for(let s of sheets){
+            for(let f of s.free){
+
+                let options = getOrientations(cut, s.m.grain);
+
+                for(let o of options){
+                    if(o.w<=f.w && o.h<=f.h){
+                        s.used.push({...cut,x:f.x,y:f.y,w:o.w,h:o.h});
+
+                        s.free.push({x:f.x+o.w,y:f.y,w:f.w-o.w,h:o.h});
+                        s.free.push({x:f.x,y:f.y+o.h,w:f.w,h:f.h-o.h});
+
+                        s.free=s.free.filter(r=>r.w>0&&r.h>0);
+                        break outer;
+                    }
+                }
+            }
+        }
+    });
+
+    renderResult(sheets);
+}
+
+function renderResult(sheets){
+    let total=0, used=0;
+
+    sheets.forEach(s=>{
+        total+=areaRect(s.m.length,s.m.width);
+        s.used.forEach(u=>used+=areaRect(u.w,u.h));
+    });
+
+    let waste=total-used;
+
+    result.innerHTML = `
+        <p><b>Material:</b> ${(total/1e6).toFixed(2)} m²</p>
+        <p><b>Genutzt:</b> ${(used/1e6).toFixed(2)} m²</p>
+        <p><b>Verschnitt:</b> ${(waste/1e6).toFixed(2)} m²</p>
+        <p><b>Verschnitt %:</b> ${(waste/total*100).toFixed(2)}%</p>
+    `;
+
+    drawSheets(sheets);
+}
+
+function drawSheets(sheets){
+    canvasContainer.innerHTML='';
+
+    sheets.forEach(s=>{
+        let c=document.createElement('canvas');
+        c.width=300; c.height=200;
+        let ctx=c.getContext('2d');
+
+        let scale=Math.min(c.width/s.m.length,c.height/s.m.width);
+
+        ctx.strokeRect(0,0,s.m.length*scale,s.m.width*scale);
+
+        s.used.forEach(u=>{
+            ctx.strokeRect(u.x*scale,u.y*scale,u.w*scale,u.h*scale);
+        });
+
+        canvasContainer.appendChild(c);
+    });
+}
+
+function exportJSON(){
+    let blob=new Blob([JSON.stringify(appState)],{type:'application/json'});
+    let a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='cutlist.json';
+    a.click();
+}
+
+function importJSON(file){
+    let r=new FileReader();
+    r.onload=e=>{appState=JSON.parse(e.target.result);render();}
+    r.readAsText(file);
+}
+
+function exportPDF(){
+    html2canvas(document.body).then(c=>{
+        let pdf=new jspdf.jsPDF();
+        pdf.addImage(c.toDataURL('image/png'),'PNG',0,0,200,0);
+        pdf.save('result.pdf');
+    });
+}
+</script></body>
+</html>
