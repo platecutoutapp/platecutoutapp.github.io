@@ -623,7 +623,9 @@ function exportPDF() {
    EVENT BINDING
 ========================= */
 document.addEventListener("DOMContentLoaded", () => {
+     
 
+        createCutListUI();
     // Optimize Button
     document.querySelector("header button.bg-primary")
         ?.addEventListener("click", calculate);
@@ -644,5 +646,117 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
 });
+
+/* =========================
+   CUTLIST UI
+========================= */
+
+function createCutListUI() {
+    const container = document.createElement("section");
+    container.className = "bg-surface-container-lowest p-8 rounded-xl border border-outline-variant/20 mt-6";
+
+    container.innerHTML = `
+        <div class="flex justify-between items-center mb-6">
+            <h4 class="font-bold text-lg">Zuschnittliste</h4>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mb-4">
+            <select id="cutType" class="p-2 border rounded">
+                <option value="rect">Rechteck</option>
+                <option value="tri">Dreieck</option>
+                <option value="tri_cut">Abgeschnittenes Dreieck</option>
+            </select>
+            <input id="cutQty" type="number" placeholder="Anzahl" value="1" class="p-2 border rounded"/>
+        </div>
+
+        <div id="cutFields" class="grid grid-cols-3 gap-4 mb-4"></div>
+
+        <button id="addCut" class="bg-primary text-white px-4 py-2 rounded">
+            Hinzufügen
+        </button>
+
+        <div id="cutList" class="mt-6 space-y-2"></div>
+    `;
+
+    document.querySelector(".lg\\:col-span-8").appendChild(container);
+
+    updateCutFields();
+    bindCutUI();
+}
+
+function updateCutFields() {
+    const type = document.getElementById("cutType").value;
+    const fields = document.getElementById("cutFields");
+
+    if (type === "rect") {
+        fields.innerHTML = `
+            <input id="cutW" type="number" placeholder="Breite (mm)" class="p-2 border rounded"/>
+            <input id="cutH" type="number" placeholder="Höhe (mm)" class="p-2 border rounded"/>
+        `;
+    }
+
+    if (type === "tri") {
+        fields.innerHTML = `
+            <input id="cutW" type="number" placeholder="Länge (mm)" class="p-2 border rounded"/>
+            <input id="cutH" type="number" placeholder="Höhe (mm)" class="p-2 border rounded"/>
+        `;
+    }
+
+    if (type === "tri_cut") {
+        fields.innerHTML = `
+            <input id="cutW" type="number" placeholder="Länge (mm)" class="p-2 border rounded"/>
+            <input id="cutH" type="number" placeholder="Höhe (mm)" class="p-2 border rounded"/>
+            <input id="cutCH" type="number" placeholder="Abschnitthöhe" class="p-2 border rounded"/>
+        `;
+    }
+}
+
+function bindCutUI() {
+    document.getElementById("cutType").addEventListener("change", updateCutFields);
+
+    document.getElementById("addCut").addEventListener("click", () => {
+        const type = document.getElementById("cutType").value;
+        const qty = parseInt(document.getElementById("cutQty").value || 1);
+
+        const cut = {
+            type,
+            qty,
+            w: parseFloat(document.getElementById("cutW").value || 0),
+            h: parseFloat(document.getElementById("cutH").value || 0),
+            cutH: parseFloat(document.getElementById("cutCH")?.value || 0)
+        };
+
+        state.cuts.push(cut);
+        renderCutList();
+    });
+}
+
+function renderCutList() {
+    const list = document.getElementById("cutList");
+    list.innerHTML = "";
+
+    state.cuts.forEach((cut, index) => {
+        const div = document.createElement("div");
+        div.className = "flex justify-between items-center bg-white p-3 rounded border";
+
+        div.innerHTML = `
+            <div class="text-sm">
+                <b>${cut.type}</b> —
+                ${cut.w} x ${cut.h}
+                ${cut.type === "tri_cut" ? " / " + cut.cutH : ""}
+                (${cut.qty}x)
+            </div>
+            <button data-i="${index}" class="text-red-500">✕</button>
+        `;
+
+        div.querySelector("button").onclick = (e) => {
+            const i = e.target.dataset.i;
+            state.cuts.splice(i, 1);
+            renderCutList();
+        };
+
+        list.appendChild(div);
+    });
+}
                           </script>
 </body></html>
