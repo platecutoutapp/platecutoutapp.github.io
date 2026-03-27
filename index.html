@@ -351,7 +351,7 @@ function readSheetsFromUI() {
         const name = inputs[0]?.value || "Unnamed";
         const length = parseFloat(inputs[1]?.value || 0);
         const width = parseFloat(inputs[2]?.value || 0);
-        const quantity = parseInt(inputs[3]?.value || 0);
+        const quantity = Infinity;
         const grain = card.querySelector("input[type=checkbox]")?.checked ?? true;
 
         sheets.push({ name, length, width, quantity, grain });
@@ -405,14 +405,15 @@ function getArea(cut) {
 ========================= */
 function packCuts() {
     const sheets = state.sheets;
-    const cuts = normalizeCuts();
-
+    let remainingCuts = normalizeCuts();
     let usedSheets = [];
-    let remainingCuts = [...cuts];
 
-    sheets.forEach(sheet => {
-        for (let q = 0; q < sheet.quantity; q++) {
-            if (remainingCuts.length === 0) break;
+    while (remainingCuts.length > 0) {
+
+        let bestOption = null;
+
+        // teste jede Plattengröße
+        sheets.forEach(sheet => {
 
             let freeRects = [{
                 x: 0,
@@ -422,37 +423,56 @@ function packCuts() {
             }];
 
             let placed = [];
+            let testCuts = [...remainingCuts];
 
-            remainingCuts = remainingCuts.filter(cut => {
+            testCuts = testCuts.filter(cut => {
                 for (let i = 0; i < freeRects.length; i++) {
                     let fr = freeRects[i];
-
                     let fits = tryPlace(cut, fr, sheet.grain);
 
                     if (fits) {
                         placed.push({...cut, x: fr.x, y: fr.y});
 
-                        // split free space
                         freeRects.splice(i, 1);
                         freeRects.push(
                             { x: fr.x + fits.w, y: fr.y, w: fr.w - fits.w, h: fits.h },
                             { x: fr.x, y: fr.y + fits.h, w: fr.w, h: fr.h - fits.h }
                         );
 
-                        return false; // entfernt aus Liste
+                        return false;
                     }
                 }
                 return true;
             });
 
-            if (placed.length > 0) {
-                usedSheets.push({
+            const usedArea = placed.reduce((sum, p) => sum + getArea(p), 0);
+            const sheetArea = sheet.length * sheet.width;
+
+            const efficiency = usedArea / sheetArea;
+
+            if (!bestOption || efficiency > bestOption.efficiency) {
+                bestOption = {
                     sheet,
-                    placements: placed
-                });
+                    placed,
+                    remaining: testCuts,
+                    efficiency
+                };
             }
+        });
+
+        // Sicherheit: nichts passt mehr → Abbruch
+        if (!bestOption || bestOption.placed.length === 0) {
+            console.warn("Einige Teile passen auf keine Platte!");
+            break;
         }
-    });
+
+        usedSheets.push({
+            sheet: bestOption.sheet,
+            placements: bestOption.placed
+        });
+
+        remainingCuts = bestOption.remaining;
+    }
 
     return usedSheets;
 }
@@ -496,6 +516,15 @@ function calculate() {
         });
     });
 
+        const sheetCount = {};
+
+packed.forEach(s => {
+    const key = `${s.sheet.length}x${s.sheet.width}`;
+    sheetCount[key] = (sheetCount[key] || 0) + 1;
+});
+
+state.results.sheetCount = sheetCount;
+
     const waste = totalSheetArea - usedArea;
 
     state.results = {
@@ -524,6 +553,8 @@ function updateSummary() {
     if (areaEl) {
         areaEl.textContent = state.results.totalArea.toFixed(2) + " m²";
     }
+
+        console.log("Plattenbedarf:", state.results.sheetCount);
 }
 
 /* =========================
