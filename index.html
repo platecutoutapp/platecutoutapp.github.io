@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+
+<html lang="de"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        h1, h2, h3, .font-headline {
+            font-family: 'Manrope', sans-serif;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+        }
+        .ghost-border-bottom {
+            border-bottom: 1px solid rgba(194, 198, 212, 0.2);
+        }
+        .ghost-border-bottom:focus-within {
+            border-bottom: 2px solid #00478d;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "inverse-on-surface": "#edf1f5",
+                        "outline": "#727783",
+                        "primary-container": "#005eb8",
+                        "surface-tint": "#005db6",
+                        "primary-fixed": "#d6e3ff",
+                        "on-surface": "#171c1f",
+                        "secondary-container": "#d5e3fc",
+                        "surface-dim": "#d6dade",
+                        "on-secondary-fixed-variant": "#3a485b",
+                        "on-secondary": "#ffffff",
+                        "inverse-surface": "#2c3134",
+                        "on-tertiary-container": "#ffd2b0",
+                        "on-error": "#ffffff",
+                        "tertiary": "#703a00",
+                        "on-primary-container": "#c8daff",
+                        "on-tertiary-fixed-variant": "#6e3900",
+                        "on-error-container": "#93000a",
+                        "surface-container-highest": "#dfe3e7",
+                        "surface-container-low": "#f0f4f8",
+                        "inverse-primary": "#a9c7ff",
+                        "on-secondary-fixed": "#0d1c2e",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-fixed": "#2f1500",
+                        "surface-bright": "#f6fafe",
+                        "tertiary-fixed-dim": "#ffb77d",
+                        "surface-variant": "#dfe3e7",
+                        "on-tertiary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "outline-variant": "#c2c6d4",
+                        "primary": "#00478d",
+                        "on-primary-fixed-variant": "#00468c",
+                        "primary-fixed-dim": "#a9c7ff",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary": "#515f74",
+                        "secondary-fixed-dim": "#b9c7df",
+                        "background": "#f6fafe",
+                        "on-background": "#171c1f",
+                        "tertiary-fixed": "#ffdcc3",
+                        "surface-container-high": "#e4e9ed",
+                        "secondary-fixed": "#d5e3fc",
+                        "on-primary-fixed": "#001b3d",
+                        "on-surface-variant": "#424752",
+                        "surface": "#f6fafe",
+                        "on-secondary-container": "#57657a",
+                        "on-primary": "#ffffff",
+                        "tertiary-container": "#924e00",
+                        "surface-container": "#eaeef2"
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-surface text-on-surface flex min-h-screen overflow-hidden">
+<!-- SideNavBar (Authority: JSON) -->
+<aside class="fixed left-0 top-0 h-full flex flex-col py-4 bg-slate-100 dark:bg-slate-950 h-screen w-64 border-r transition-transform duration-200 ease-in-out z-40">
+<div class="px-6 mb-8">
+<h1 class="text-lg font-bold text-[#00478d] font-headline">OptiCut Pro</h1>
+<div class="mt-4 flex items-center gap-3 bg-surface-container-low p-3 rounded-xl">
+<div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center text-on-primary-container">
+<span class="material-symbols-outlined">architecture</span>
+</div>
+<div>
+<p class="text-sm font-bold text-on-surface">Project Alpha-24</p>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-wider">Material: Aluminum 6061</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<!-- Active Tab: Materials -->
+<a class="flex items-center gap-3 px-6 py-3 bg-white dark:bg-slate-900 text-[#00478d] dark:text-[#47a1ff] shadow-sm rounded-l-lg ml-2 font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined">inventory_2</span>
+<span>Materials</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-3 text-slate-600 dark:text-slate-400 hover:text-[#00478d] hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined">format_list_bulleted</span>
+<span>Cut List</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-3 text-slate-600 dark:text-slate-400 hover:text-[#00478d] hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span>Results</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-3 text-slate-600 dark:text-slate-400 hover:text-[#00478d] hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined">ios_share</span>
+<span>Export</span>
+</a>
+</nav>
+<div class="px-4 mt-auto space-y-1 pt-4 border-t border-slate-200 dark:border-slate-800">
+<button class="w-full bg-gradient-to-r from-primary to-primary-container text-on-primary py-2.5 rounded-md text-sm font-bold mb-4 shadow-sm active:scale-95 transition-all">
+                New Calculation
+            </button>
+<a class="flex items-center gap-3 px-4 py-2 text-slate-500 hover:text-primary transition-colors text-sm" href="#">
+<span class="material-symbols-outlined">help</span>
+<span>Help</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 text-slate-500 hover:text-primary transition-colors text-sm" href="#">
+<span class="material-symbols-outlined">description</span>
+<span>Documentation</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 flex-1 flex flex-col h-screen overflow-y-auto">
+<!-- TopAppBar (Authority: JSON) -->
+<header class="sticky top-0 z-30 flex justify-between items-center w-full px-8 h-16 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0">
+<div class="flex items-center gap-8">
+<h2 class="text-xl font-black text-[#00478d] dark:text-[#47a1ff] font-headline uppercase tracking-tight">Material-Konfiguration</h2>
+<nav class="hidden md:flex gap-6">
+<a class="text-[#00478d] dark:text-[#47a1ff] border-b-2 border-[#00478d] pb-1 font-bold text-sm" href="#">Dashboard</a>
+<a class="text-slate-500 dark:text-slate-400 hover:text-slate-800 transition-colors font-bold text-sm" href="#">Projects</a>
+<a class="text-slate-500 dark:text-slate-400 hover:text-slate-800 transition-colors font-bold text-sm" href="#">Inventory</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2">
+<button class="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-all">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-all">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+<button class="bg-primary px-5 py-1.5 text-white rounded-md font-bold text-sm active:opacity-80 active:scale-95 transition-all">
+                    Optimize
+                </button>
+<div class="w-8 h-8 rounded-full overflow-hidden border-2 border-primary-container">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="close-up portrait of a professional engineer with a friendly expression in a modern office environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBIZc8SdRec7uqp3zFUZ2fb33wJXx81ydCm-oR06ol6LhnpD689SRqnCk7UQhxN31Snk3k5UOI9iZnLJTnUQuqIOzLSVTWHk4ZLk1xdHzBlKjqJs6LmVESp3F9g_eamFyRdkCeRuNAE-NifjVWRNswMbKGQQyseT1CdauND4Mr1qfCYqVuURjbxp4gY2ttMU9r5K246jKgDqsh1oLcXjW8sslwdUVFqlpelvc9pk4IGmjnT2Igl8OzRwpyzgQBf6Q8NhbrOcMkYDPw"/>
+</div>
+</div>
+</header>
+<!-- Content Area -->
+<div class="p-8 max-w-6xl mx-auto w-full">
+<!-- Header Section -->
+<div class="mb-10">
+<span class="text-xs font-bold text-on-surface-variant tracking-[0.2em] uppercase">Phase 01 — Material Setup</span>
+<h3 class="text-4xl font-extrabold text-on-surface mt-2 tracking-tight">Verfügbare Platten</h3>
+<p class="text-secondary max-w-2xl mt-4 leading-relaxed">
+                    Definieren Sie hier Ihre Rohformate. Das System berechnet automatisch die effizienteste Verteilung Ihrer Schnittliste auf diesen Dimensionen.
+                </p>
+</div>
+<!-- Bento Layout Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+<!-- Main Input Area -->
+<div class="lg:col-span-8 space-y-6">
+<!-- Sheet Form Card 01 -->
+<section class="bg-surface-container-lowest p-8 rounded-xl border border-outline-variant/20 shadow-[0_10px_40px_rgba(23,28,31,0.04)] transition-all hover:shadow-md">
+<div class="flex items-center justify-between mb-8">
+<div class="flex items-center gap-3">
+<span class="w-8 h-8 rounded-full bg-primary-fixed flex items-center justify-center text-primary font-bold text-sm">01</span>
+<h4 class="font-headline font-bold text-lg">Standardformat A</h4>
+</div>
+<button class="text-error flex items-center gap-1 text-sm font-medium hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined text-lg">delete</span>
+                                Entfernen
+                            </button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+<!-- Name Field -->
+<div class="md:col-span-2">
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Bezeichnung</label>
+<div class="ghost-border-bottom py-2 focus-within:bg-surface-container-low transition-colors px-2">
+<input class="w-full bg-transparent border-none focus:ring-0 text-on-surface font-medium p-0" placeholder="z.B. Birkensperrholz 18mm" type="text"/>
+</div>
+</div>
+<!-- Length -->
+<div>
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Länge</label>
+<div class="ghost-border-bottom py-2 flex items-center focus-within:bg-surface-container-low transition-colors px-2">
+<input class="w-full bg-transparent border-none focus:ring-0 text-on-surface font-bold text-xl p-0 [appearance:textfield] [&amp;::-webkit-outer-spin-button]:appearance-none [&amp;::-webkit-inner-spin-button]:appearance-none" type="number" value="2500"/>
+<span class="text-on-surface-variant font-label text-sm ml-2">mm</span>
+</div>
+</div>
+<!-- Width -->
+<div>
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Breite</label>
+<div class="ghost-border-bottom py-2 flex items-center focus-within:bg-surface-container-low transition-colors px-2">
+<input class="w-full bg-transparent border-none focus:ring-0 text-on-surface font-bold text-xl p-0 [appearance:textfield] [&amp;::-webkit-outer-spin-button]:appearance-none [&amp;::-webkit-inner-spin-button]:appearance-none" type="number" value="1250"/>
+<span class="text-on-surface-variant font-label text-sm ml-2">mm</span>
+</div>
+</div>
+<!-- Quantity -->
+<div>
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Anzahl</label>
+<div class="ghost-border-bottom py-2 flex items-center focus-within:bg-surface-container-low transition-colors px-2">
+<input class="w-full bg-transparent border-none focus:ring-0 text-on-surface font-bold text-xl p-0 [appearance:textfield] [&amp;::-webkit-outer-spin-button]:appearance-none [&amp;::-webkit-inner-spin-button]:appearance-none" type="number" value="10"/>
+<span class="text-on-surface-variant font-label text-sm ml-2">Stk.</span>
+</div>
+</div>
+<!-- Grain Direction Toggle -->
+<div class="flex items-center justify-between py-4">
+<div>
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1">Maserung beachten</label>
+<p class="text-[10px] text-on-surface-variant/70 leading-tight">Richtungsorientierung aktivieren</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-high rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+</section>
+<!-- Add Button Component -->
+<button class="w-full border-2 border-dashed border-outline-variant hover:border-primary hover:bg-primary/5 transition-all py-6 rounded-xl flex items-center justify-center gap-3 text-on-surface-variant hover:text-primary group">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">add_circle</span>
+<span class="font-bold text-sm tracking-wide">Neues Plattenformat hinzufügen</span>
+</button>
+</div>
+<!-- Guidance & Context Sidebar -->
+<div class="lg:col-span-4 space-y-6">
+<!-- Rule Explanation Card -->
+<div class="bg-surface-container-low p-6 rounded-xl border border-outline-variant/10">
+<div class="flex items-center gap-2 mb-4 text-tertiary">
+<span class="material-symbols-outlined">info</span>
+<h5 class="font-bold text-sm">Rotations-Regeln</h5>
+</div>
+<div class="space-y-4">
+<div class="p-4 bg-surface-container-lowest rounded-lg">
+<p class="text-xs font-bold text-on-surface mb-2 flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+                                    Maserung Aktiv
+                                </p>
+<p class="text-xs text-on-surface-variant leading-relaxed">
+                                    Teile können nur um <span class="font-bold text-on-surface">180°</span> gedreht werden. Die optische Struktur bleibt horizontal oder vertikal erhalten.
+                                </p>
+</div>
+<div class="p-4 bg-surface-container-lowest rounded-lg">
+<p class="text-xs font-bold text-on-surface mb-2 flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                                    Maserung Inaktiv
+                                </p>
+<p class="text-xs text-on-surface-variant leading-relaxed">
+                                    Optimale Materialausnutzung durch <span class="font-bold text-on-surface">90° Rotation</span>. Empfohlen für einfarbige oder neutrale Oberflächen.
+                                </p>
+</div>
+</div>
+</div>
+<!-- Material Preview Aesthetic Card -->
+<div class="relative overflow-hidden rounded-xl h-64 group">
+<img class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="high-quality macro shot of brushed aluminum texture with subtle linear grain and professional studio lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC4Zr-Jy39rDpWr9MLjT40JP2dxd7TmwUdMrMWbexERVNkCuD_phvfTatjtsTJ9Jr9YIIC7LUp_4B9fWIUbOEfDQbAzeq61g7BiCUk8PbLSg_oVWncHBGkPeJAdtKUD4oVEUhecRO2RSTCjedsxIkb_nnTi6-cppKfxoRtCe6ViRHqCIv178Cx2Xe1KkU36OYOHH3n44afxhopcXOKmkiuIuZPxQhJE9faRRo5UvIXDRgWpsar2G_cjFxBSBsqj38zkR7B5y_ByUcs"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-6">
+<span class="text-[10px] font-bold text-primary-fixed tracking-[0.3em] uppercase mb-2">Technical Preview</span>
+<h4 class="text-white font-headline font-bold text-lg">Aluminum 6061-T6</h4>
+<p class="text-white/70 text-xs mt-2">Präzisionsgrad: 0.05mm<br/>Optimierungsmodus: Minimaler Verschnitt</p>
+</div>
+</div>
+<!-- Summary Widget -->
+<div class="bg-primary text-on-primary p-6 rounded-xl shadow-lg">
+<div class="flex justify-between items-center mb-6">
+<h5 class="font-bold text-xs uppercase tracking-widest opacity-80">Konfigurations-Status</h5>
+<span class="material-symbols-outlined text-sm">check_circle</span>
+</div>
+<div class="flex items-end gap-2">
+<span class="text-4xl font-black font-headline tracking-tighter">12</span>
+<span class="text-sm font-bold opacity-80 mb-1.5">Platten definiert</span>
+</div>
+<div class="mt-4 pt-4 border-t border-white/10 flex justify-between text-[10px] font-bold uppercase tracking-widest opacity-60">
+<span>Gesamtfläche</span>
+<span>37.50 m²</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Sticky Mobile Bottom Nav - Only visible on small screens -->
+<div class="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 z-50 flex justify-around items-center h-16 px-4">
+<button class="flex flex-col items-center gap-1 text-primary">
+<span class="material-symbols-outlined">inventory_2</span>
+<span class="text-[10px] font-bold uppercase">Material</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-slate-400">
+<span class="material-symbols-outlined">format_list_bulleted</span>
+<span class="text-[10px] font-bold uppercase">Liste</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-slate-400">
+<span class="material-symbols-outlined">analytics</span>
+<span class="text-[10px] font-bold uppercase">Result</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-slate-400">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-[10px] font-bold uppercase">Setup</span>
+</button>
+</div>
+</main>
+</body></html>
