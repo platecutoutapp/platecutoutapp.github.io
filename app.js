@@ -1,82 +1,216 @@
-// Material Sheet Optimization Logic in JavaScript
+/* =========================   STATE MANAGEMENT  ========================= */
+const state = {
+    sheets: [], // Verfügbare Rohplatten
+    cuts: [],   // Gewünschte Zuschnitte
+    results: null
+};
 
-// 1. Material Management
-class Material {
-    constructor(name, width, height, grainDirection) {
-        this.name = name;
-        this.width = width;
-        this.height = height;
-        this.grainDirection = grainDirection; // 0 for horizontal, 1 for vertical
-    }
+/* =========================   UI TEMPLATES  ========================= */
+function createSheetHTML(index) {
+    return `
+    <section class="sheet-card bg-surface-container-lowest p-8 rounded-xl border border-outline-variant/20 shadow-sm transition-all hover:shadow-md mb-6" data-index="${index}">
+        <div class="flex items-center justify-between mb-8">
+            <div class="flex items-center gap-3">
+                <span class="w-8 h-8 rounded-full bg-primary-fixed flex items-center justify-center text-primary font-bold text-sm">${index + 1}</span>
+                <h4 class="font-headline font-bold text-lg">Plattenformat</h4>
+            </div>
+            <button onclick="removeSheet(${index})" class="text-error flex items-center gap-1 text-sm font-medium hover:opacity-80 transition-opacity">
+                <span class="material-symbols-outlined text-lg">delete</span> Entfernen
+            </button>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+            <div class="md:col-span-2">
+                <label class="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Bezeichnung</label>
+                <div class="ghost-border-bottom py-2 px-2"><input class="sheet-name w-full bg-transparent border-none focus:ring-0 text-on-surface font-medium p-0" placeholder="z.B. Sperrholz 18mm" type="text" value="Standardformat ${String.fromCharCode(65 + index)}"/></div>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Länge (mm)</label>
+                <div class="ghost-border-bottom py-2 flex items-center px-2"><input class="sheet-l w-full bg-transparent border-none focus:ring-0 text-on-surface font-bold text-xl p-0" type="number" value="2500"/></div>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Breite (mm)</label>
+                <div class="ghost-border-bottom py-2 flex items-center px-2"><input class="sheet-w w-full bg-transparent border-none focus:ring-0 text-on-surface font-bold text-xl p-0" type="number" value="1250"/></div>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">Anzahl</label>
+                <div class="ghost-border-bottom py-2 flex items-center px-2"><input class="sheet-qty w-full bg-transparent border-none focus:ring-0 text-on-surface font-bold text-xl p-0" type="number" value="10"/></div>
+            </div>
+            <div class="flex items-center justify-between py-4">
+                <div><label class="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1">Maserung beachten</label></div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" class="sheet-grain sr-only peer" checked>
+                    <div class="w-11 h-6 bg-surface-container-high rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-primary after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                </label>
+            </div>
+        </div>
+    </section>`;
 }
 
-// 2. Cut List Handling
-class CutPiece {
-    constructor(type, dimensions) {
-        this.type = type; // 'rectangle', 'triangle', 'trapezoid'
-        this.dimensions = dimensions; // For rectangles: {width, height}, for triangle: {base, height}, for trapezoid: {base1, base2, height}
-    }
+/* =========================   CORE ACTIONS  ========================= */
+function addSheet() {
+    const container = document.getElementById('sheet-container');
+    const index = document.querySelectorAll('.sheet-card').length;
+    const div = document.createElement('div');
+    div.innerHTML = createSheetHTML(index);
+    container.appendChild(div.firstElementChild);
+    updateSummary();
 }
 
-// Function to calculate area of each shape
-function calculateArea(cutPiece) {
-    switch (cutPiece.type) {
-        case 'rectangle':
-            return cutPiece.dimensions.width * cutPiece.dimensions.height;
-        case 'triangle':
-            return 0.5 * cutPiece.dimensions.base * cutPiece.dimensions.height;
-        case 'trapezoid':
-            return 0.5 * (cutPiece.dimensions.base1 + cutPiece.dimensions.base2) * cutPiece.dimensions.height;
-        default:
-            return 0;
-    }
+function removeSheet(index) {
+    const card = document.querySelector(`.sheet-card[data-index="${index}"]`);
+    card?.remove();
+    // Indices neu ordnen
+    document.querySelectorAll('.sheet-card').forEach((card, i) => {
+        card.setAttribute('data-index', i);
+        card.querySelector('.w-8.h-8').textContent = i + 1;
+    });
+    updateSummary();
 }
 
-// 3. Bin Packing Algorithm (Simplified Example)
-function binPacking(material, cutList) {
-    let totalArea = material.width * material.height;
-    let usedArea = 0;
+function readUI() {
+    // Platten auslesen
+    state.sheets = Array.from(document.querySelectorAll('.sheet-card')).map(card => ({
+        name: card.querySelector('.sheet-name').value,
+        length: parseFloat(card.querySelector('.sheet-l').value),
+        width: parseFloat(card.querySelector('.sheet-w').value),
+        qty: parseInt(card.querySelector('.sheet-qty').value),
+        grain: card.querySelector('.sheet-grain').checked
+    }));
+}
 
-    cutList.forEach(piece => {
-        usedArea += calculateArea(piece);
+/* =========================   ALGORITHM (SIMPLE SHELF PACKING)  ========================= */
+function calculate() {
+    readUI();
+    if (state.cuts.length === 0) return alert("Bitte fügen Sie zuerst Zuschnitte hinzu.");
+
+    let remainingCuts = [];
+    state.cuts.forEach(c => {
+        for(let i=0; i<c.qty; i++) remainingCuts.push({...c, id: Math.random()});
     });
 
-    return { totalArea, usedArea, waste: totalArea - usedArea };
-}
+    // Sortierung: Größte Fläche zuerst
+    remainingCuts.sort((a, b) => (b.w * b.h) - (a.w * a.h));
 
-// 4. Grain Direction Constraints (Basic implementation)
-function checkGrainDirection(material, cutPiece) {
-    // Example logic based on height and width considering grain direction
-    if (material.grainDirection === 0 && cutPiece.dimensions.height > material.height) {
-        return false; // Fail if height exceeds and grain direction is horizontal
+    let usedSheets = [];
+    let currentCuts = [...remainingCuts];
+
+    // Simpler Algorithmus: Versuche Platten nacheinander zu füllen
+    for (let sheetDef of state.sheets) {
+        for (let q = 0; q < sheetDef.qty; q++) {
+            if (currentCuts.length === 0) break;
+
+            let placed = [];
+            let freeRects = [{ x: 0, y: 0, w: sheetDef.length, h: sheetDef.width }];
+
+            for (let i = 0; i < currentCuts.length; i++) {
+                let cut = currentCuts[i];
+                for (let j = 0; j < freeRects.length; j++) {
+                    let fr = freeRects[j];
+                    
+                    // Prüfe Orientierung (Maserung beachten)
+                    let fits = false;
+                    let finalW = cut.w, finalH = cut.h;
+
+                    if (finalW <= fr.w && finalH <= fr.h) {
+                        fits = true;
+                    } else if (!sheetDef.grain && finalH <= fr.w && finalW <= fr.h) {
+                        fits = true;
+                        [finalW, finalH] = [finalH, finalW];
+                    }
+
+                    if (fits) {
+                        placed.push({ ...cut, x: fr.x, y: fr.y, w: finalW, h: finalH });
+                        // Splitte freien Platz (einfacher Guillotine-Schnitt)
+                        freeRects.splice(j, 1);
+                        if (fr.w - finalW > 0) freeRects.push({ x: fr.x + finalW, y: fr.y, w: fr.w - finalW, h: finalH });
+                        if (fr.h - finalH > 0) freeRects.push({ x: fr.x, y: fr.y + finalH, w: fr.w, h: fr.h - finalH });
+                        
+                        currentCuts.splice(i, 1);
+                        i--;
+                        break;
+                    }
+                }
+            }
+            if (placed.length > 0) {
+                usedSheets.push({ sheet: sheetDef, placements: placed });
+            }
+        }
     }
-    return true;
+
+    state.results = { 
+        usedSheets, 
+        unplaced: currentCuts,
+        totalArea: usedSheets.reduce((sum, s) => sum + (s.sheet.length * s.sheet.width), 0) / 1000000
+    };
+    
+    renderResults();
 }
 
-// 5. Material Calculations Example
-function calculateEfficiency(material, usedArea) {
-    return (usedArea / (material.width * material.height)) * 100;
+/* =========================   VISUALIZATION  ========================= */
+function renderResults() {
+    updateSummary();
+    const container = document.getElementById('results-canvas-container');
+    container.innerHTML = '<h4 class="font-bold mb-4">Schnittplan Vorschau</h4>';
+    
+    state.results.usedSheets.forEach((data, i) => {
+        const canvas = document.createElement('canvas');
+        canvas.className = "w-full border bg-white rounded-lg mb-4 shadow-sm";
+        const ctx = canvas.getContext('2d');
+        
+        // Skalierung berechnen
+        const scale = 800 / data.sheet.length;
+        canvas.width = 800;
+        canvas.height = data.sheet.width * scale;
+
+        // Platte zeichnen
+        ctx.fillStyle = "#f0f4f8";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Schnitte zeichnen
+        data.placements.forEach(p => {
+            ctx.fillStyle = "#00478d";
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 1;
+            ctx.fillRect(p.x * scale, p.y * scale, p.w * scale, p.h * scale);
+            ctx.strokeRect(p.x * scale, p.y * scale, p.w * scale, p.h * scale);
+        });
+
+        container.appendChild(canvas);
+    });
 }
 
-// 6. Export Functionality
-function exportCutList(cutList) {
-    // For simplicity, exporting to JSON format
-    return JSON.stringify(cutList, null, 2);
+function updateSummary() {
+    const sheetCount = document.querySelectorAll('.sheet-card').length;
+    document.querySelector(".text-4xl").textContent = state.results ? state.results.usedSheets.length : sheetCount;
+    
+    if(state.results) {
+        document.querySelector(".border-t span:last-child").textContent = state.results.totalArea.toFixed(2) + " m²";
+    }
 }
 
-// Example Usage
-const material = new Material('Plywood', 2440, 1220, 0);
-const cutList = [
-    new CutPiece('rectangle', { width: 600, height: 800 }),
-    new CutPiece('triangle', { base: 400, height: 300 }),
-    new CutPiece('trapezoid', { base1: 300, base2: 500, height: 400 })
-];
+/* =========================   INIT  ========================= */
+document.addEventListener("DOMContentLoaded", () => {
+    // Container für Platten dynamisch finden/erstellen
+    const mainArea = document.querySelector(".lg\\:col-span-8");
+    const sheetContainer = document.createElement('div');
+    sheetContainer.id = "sheet-container";
+    mainArea.prepend(sheetContainer);
 
-if (checkGrainDirection(material, cutList[0])) {
-    const packingResult = binPacking(material, cutList);
-    console.log(`Total Area: ${packingResult.totalArea}, Used Area: ${packingResult.usedArea}, Waste: ${packingResult.waste}`);
-    console.log(`Efficiency: ${calculateEfficiency(material, packingResult.usedArea)}%`);
-    console.log('Exported Cut List:', exportCutList(cutList));
-} else {
-    console.log('Cut piece does not comply with grain direction constraints.');
-} 
+    // Initial eine Platte hinzufügen
+    addSheet();
+
+    // Event Listener für Buttons
+    document.querySelector(".border-dashed").onclick = addSheet;
+    document.querySelector("header button.bg-primary").onclick = calculate;
+    
+    // Result Container vorbereiten
+    const resDiv = document.createElement('div');
+    resDiv.id = "results-canvas-container";
+    resDiv.className = "mt-10";
+    mainArea.appendChild(resDiv);
+
+    // Zuschnitt-UI initialisieren (aus Ihrem Code übernommen)
+    createCutListUI();
+});
+
+// [Hier die restlichen Hilfsfunktionen aus deinem Code wie createCutListUI, renderCutList einfügen]
