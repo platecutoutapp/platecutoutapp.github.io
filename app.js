@@ -323,3 +323,16 @@ function startNewCalculation() {
     }
 }
 
+function getArea(item) {
+    const { l, w, type, cutH } = item;
+    switch (type) {
+        case "tri":
+            return (l * w) / 2;
+        case "tri_cut":
+            // Trapez-Fläche für abgeschnittene Dreiecke
+            return ((w + (cutH || 0)) / 2) * l;
+        default:
+            return l * w; // Rechteck
+    }
+}
+
