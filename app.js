@@ -211,6 +211,115 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Zuschnitt-UI initialisieren (aus Ihrem Code übernommen)
     createCutListUI();
+
+    // In den DOMContentLoaded Listener einfügen:
+
+// Sidebar Buttons
+document.querySelector('aside button.bg-primary').onclick = startNewCalculation;
+
+// Export Links (In der Sidebar)
+const navLinks = document.querySelectorAll('aside nav a');
+navLinks.forEach(link => {
+    const text = link.innerText.toLowerCase();
+    if (text.includes('export')) {
+        link.onclick = (e) => {
+            e.preventDefault();
+            exportJSON();
+        };
+    }
+});
+
+// "Results" Link in der Nav oben oder Sidebar
+// Hier könnte man einen Sprung zum Result-Container einbauen
 });
 
 // [Hier die restlichen Hilfsfunktionen aus deinem Code wie createCutListUI, renderCutList einfügen]
+/* =========================   EXPORT & DATEI   ========================= */
+
+// Projekt als JSON herunterladen
+function exportJSON() {
+    if (state.sheets.length === 0 && state.cuts.length === 0) {
+        alert("Keine Daten zum Exportieren vorhanden.");
+        return;
+    }
+    const data = JSON.stringify({
+        sheets: state.sheets,
+        cuts: state.cuts,
+        timestamp: new Date().toISOString()
+    }, null, 2);
+    
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `OptiCut_Export_${new Date().toLocaleDateString()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// Die berechneten Schnittpläne als Bild (PNG) speichern
+function exportImage() {
+    const canvases = document.querySelectorAll('#results-canvas-container canvas');
+    if (canvases.length === 0) {
+        alert("Bitte führen Sie zuerst eine Optimierung durch.");
+        return;
+    }
+
+    canvases.forEach((canvas, index) => {
+        const link = document.createElement('a');
+        link.download = `Schnittplan_Platte_${index + 1}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+    });
+}
+
+// Einfacher PDF-Export über die Druckfunktion
+function exportPDF() {
+    const container = document.getElementById('results-canvas-container');
+    if (container.classList.contains('hidden')) {
+        alert("Nichts zum Drucken vorhanden.");
+        return;
+    }
+    
+    // Temporäres Fenster für sauberen Druck
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <html>
+            <head><title>Schnittplan Export</title></head>
+            <body style="font-family: sans-serif; padding: 20px;">
+                <h1>OptiCut Pro - Schnittbericht</h1>
+                <p>Datum: ${new Date().toLocaleString()}</p>
+                <hr>
+                ${container.innerHTML}
+                <style>canvas { max-width: 100%; border: 1px solid #000; margin-bottom: 20px; }</style>
+            </body>
+        </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => { printWindow.print(); }, 500);
+}
+
+/* =========================   APP MANAGEMENT   ========================= */
+
+function startNewCalculation() {
+    if (confirm("Möchten Sie alle aktuellen Eingaben löschen und neu starten?")) {
+        state.sheets = [];
+        state.cuts = [];
+        state.results = null;
+        
+        // UI zurücksetzen
+        document.getElementById('sheet-container').innerHTML = '';
+        document.getElementById('cut-display-list').innerHTML = '';
+        document.getElementById('results-canvas-container').innerHTML = '';
+        document.getElementById('results-canvas-container').classList.add('hidden');
+        
+        // Stats zurücksetzen
+        document.getElementById('stat-sheets-count').innerText = '0';
+        document.getElementById('stat-total-area').innerText = '0.00 m²';
+        
+        // Initial eine leere Platte hinzufügen
+        addSheet();
+    }
+}
+
