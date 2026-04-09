@@ -3,7 +3,7 @@ const state = {
     sheets: [], 
     cuts: [],   
     results: null,
-    activeShape: 'rect' // 'rect', 'triangle', 'trapezoid'
+    activeShape: 'rect'
 };
 
 /* =========================   UI TEMPLATES   ========================= */
@@ -14,8 +14,8 @@ function createSheetHTML(index) {
     <section class="sheet-card bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6" data-index="${index}">
         <div class="flex items-center justify-between mb-4">
             <div class="flex items-center gap-3">
-                <span class="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm">${index + 1}</span>
-                <h4 class="font-headline font-bold text-lg">Plattenformat ${letter}</h4>
+                <span class="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-sm">${letter}</span>
+                <input class="sheet-name bg-transparent border-none font-bold text-lg p-0 focus:ring-0" type="text" value="Format ${letter}" oninput="window.calculate()"/>
             </div>
             <button onclick="window.removeSheet(${index})" class="text-error hover:bg-red-50 p-2 rounded-lg transition-colors">
                 <span class="material-symbols-outlined">delete</span>
@@ -24,19 +24,21 @@ function createSheetHTML(index) {
         <div class="grid grid-cols-2 gap-4">
             <div>
                 <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Länge (mm)</label>
-                <input class="sheet-l w-full bg-slate-50 border-none rounded-lg p-3 text-primary font-bold text-lg focus:ring-2 focus:ring-primary/20" 
-                       type="number" value="2500" oninput="window.calculate()"/>
+                <input class="sheet-l w-full bg-slate-50 border-none rounded-lg p-3 text-primary font-bold text-lg" type="number" value="2500" oninput="window.calculate()"/>
             </div>
             <div>
                 <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Breite (mm)</label>
-                <input class="sheet-w w-full bg-slate-50 border-none rounded-lg p-3 text-primary font-bold text-lg focus:ring-2 focus:ring-primary/20" 
-                       type="number" value="1250" oninput="window.calculate()"/>
+                <input class="sheet-w w-full bg-slate-50 border-none rounded-lg p-3 text-primary font-bold text-lg" type="number" value="1250" oninput="window.calculate()"/>
             </div>
+        </div>
+        <div class="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+            <span class="text-xs font-medium text-slate-500">Maserung / Rotation erlauben (90°)</span>
+            <input type="checkbox" class="sheet-grain rounded text-primary" onchange="window.calculate()">
         </div>
     </section>`;
 }
 
-/* =========================   CORE LOGIC   ========================= */
+/* =========================   UI LOGIK   ========================= */
 
 window.addSheet = function() {
     const container = document.getElementById('sheet-container');
@@ -49,12 +51,11 @@ window.addSheet = function() {
 
 window.removeSheet = function(index) {
     const container = document.getElementById('sheet-container');
-    if (container.querySelectorAll('.sheet-card').length <= 1) return alert("Ein Format muss bleiben!");
+    if (container.querySelectorAll('.sheet-card').length <= 1) return alert("Mindestens ein Format muss bleiben!");
     container.querySelector(`.sheet-card[data-index="${index}"]`).remove();
     window.calculate();
 };
 
-// Wechselt die Eingabemasken für die Formen
 window.setShape = function(shape) {
     state.activeShape = shape;
     document.querySelectorAll('.shape-tab').forEach(btn => {
@@ -66,61 +67,132 @@ window.setShape = function(shape) {
     if (shape === 'trapezoid') {
         extraFields.innerHTML = `
             <div>
-                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Obere Breite (mm)</label>
-                <input id="cut-l2" type="number" placeholder="L2" class="w-full border-slate-200 rounded-lg text-sm p-3">
-            </div>
-        `;
-    } else {
-        extraFields.innerHTML = '';
-    }
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Obere Br. (mm)</label>
+                <input id="cut-l2" type="number" placeholder="L2" class="w-full border-slate-200 rounded-lg text-sm p-3 focus:ring-primary">
+            </div>`;
+    } else { extraFields.innerHTML = ''; }
 };
 
+/* =========================   ALGORITHMUS (Multi-Bin & Pairing) ========================= */
+
+// Kombiniert passende Dreiecke/Trapeze zu Rechtecken
+function preprocessCuts(cuts) {
+    let pool = [];
+    cuts.forEach(c => { for(let i=0; i<c.qty; i++) pool.push({...c, id: Math.random()}); });
+
+    let rectsToPack = [];
+
+    // 1. Dreiecke paaren (180° gedreht ergeben sie ein Rechteck L x W)
+    let triangles = pool.filter(c => c.shape === 'triangle');
+    pool = pool.filter(c => c.shape !== 'triangle');
+    while(triangles.length > 0) {
+        let t1 = triangles.shift();
+        let matchIdx = triangles.findIndex(t2 => t2.l === t1.l && t2.w === t1.w);
+        if (matchIdx !== -1) {
+            let t2 = triangles.splice(matchIdx, 1)[0];
+            rectsToPack.push({ isPair: true, type: 'triangle', l: t1.l, w: t1.w, area: t1.l*t1.w, items: [t1, t2] });
+        } else {
+            rectsToPack.push({ isPair: false, type: 'triangle', l: t1.l, w: t1.w, area: t1.l*t1.w, items: [t1] });
+        }
+    }
+
+    // 2. Trapeze paaren (Fügt man 2 identische Trapeze gedreht zusammen, wird es ein Rechteck (L+L2) x W)
+    let trapezoids = pool.filter(c => c.shape === 'trapezoid');
+    pool = pool.filter(c => c.shape !== 'trapezoid');
+    while(trapezoids.length > 0) {
+        let t1 = trapezoids.shift();
+        let matchIdx = trapezoids.findIndex(t2 => t2.l === t1.l && t2.w === t1.w && t2.l2 === t1.l2);
+        if (matchIdx !== -1) {
+            let t2 = trapezoids.splice(matchIdx, 1)[0];
+            let combinedL = t1.l + (t1.l2 || 0);
+            rectsToPack.push({ isPair: true, type: 'trapezoid', l: combinedL, w: t1.w, area: combinedL*t1.w, items: [t1, t2] });
+        } else {
+            rectsToPack.push({ isPair: false, type: 'trapezoid', l: t1.l, w: t1.w, area: t1.l*t1.w, items: [t1] });
+        }
+    }
+
+    // 3. Rechtecke hinzufügen
+    pool.forEach(r => rectsToPack.push({ isPair: false, type: 'rect', l: r.l, w: r.w, area: r.l*r.w, items: [r] }));
+
+    // Nach Fläche sortieren (größte zuerst)
+    return rectsToPack.sort((a,b) => b.area - a.area);
+}
+
 window.calculate = function() {
-    const cards = document.querySelectorAll('.sheet-card');
-    state.sheets = Array.from(cards).map(card => ({
+    state.sheets = Array.from(document.querySelectorAll('.sheet-card')).map(card => ({
+        name: card.querySelector('.sheet-name').value,
         l: parseFloat(card.querySelector('.sheet-l').value) || 0,
         w: parseFloat(card.querySelector('.sheet-w').value) || 0,
-    }));
+        canRotate: card.querySelector('.sheet-grain').checked
+    })).filter(s => s.l > 0 && s.w > 0);
 
-    if (state.cuts.length === 0) {
+    if (state.cuts.length === 0 || state.sheets.length === 0) {
         document.getElementById('results-canvas-container').classList.add('hidden');
         return;
     }
 
-    // Packing Algorithm (Simplified Bounding Box Packing)
-    let remainingCuts = [];
-    state.cuts.forEach(c => {
-        for(let i=0; i<c.qty; i++) remainingCuts.push({ ...c });
-    });
-    remainingCuts.sort((a, b) => (b.l * b.w) - (a.l * a.w));
-
+    let remainingRects = preprocessCuts(state.cuts);
     let usedSheets = [];
-    const sheetDef = state.sheets[0] || {l: 2500, w: 1250};
 
-    while (remainingCuts.length > 0) {
-        let placed = [];
-        let freeRects = [{ x: 0, y: 0, w: sheetDef.l, h: sheetDef.w }];
+    // Multi-Bin Algorithm: Wähle Platte, die pro Schritt am vollsten wird
+    while (remainingRects.length > 0) {
+        let bestRun = { efficiency: -1, placed: [], remaining: [], sheet: null };
 
-        for (let i = 0; i < remainingCuts.length; i++) {
-            let cut = remainingCuts[i];
-            for (let j = 0; j < freeRects.length; j++) {
-                let fr = freeRects[j];
-                if (cut.l <= fr.w && cut.w <= fr.h) {
-                    placed.push({ ...cut, x: fr.x, y: fr.y });
-                    freeRects.splice(j, 1);
-                    if (fr.w - cut.l > 0) freeRects.push({ x: fr.x + cut.l, y: fr.y, w: fr.w - cut.l, h: cut.w });
-                    if (fr.h - cut.w > 0) freeRects.push({ x: fr.x, y: fr.y + cut.w, w: fr.w, h: fr.h - cut.w });
-                    remainingCuts.splice(i, 1);
-                    i--; break;
+        for (let sheet of state.sheets) {
+            let currentRemaining = [...remainingRects];
+            let placed = [];
+            let freeSpace = [{ x: 0, y: 0, w: sheet.l, h: sheet.w }];
+            let areaUsed = 0;
+
+            for (let i = 0; i < currentRemaining.length; i++) {
+                let rect = currentRemaining[i];
+                let fits = false;
+                let fw = rect.l, fh = rect.w;
+                let rotated = false;
+
+                for (let j = 0; j < freeSpace.length; j++) {
+                    let fr = freeSpace[j];
+                    if (fw <= fr.w && fh <= fr.h) {
+                        fits = true;
+                    } else if (sheet.canRotate && fh <= fr.w && fw <= fr.h) {
+                        fits = true; [fw, fh] = [fh, fw]; rotated = true;
+                    }
+
+                    if (fits) {
+                        placed.push({ ...rect, x: fr.x, y: fr.y, pw: fw, ph: fh, rotatedBox: rotated });
+                        freeSpace.splice(j, 1);
+                        // Restraum aufteilen
+                        if (fr.w - fw > 0) freeSpace.push({ x: fr.x + fw, y: fr.y, w: fr.w - fw, h: fh });
+                        if (fr.h - fh > 0) freeSpace.push({ x: fr.x, y: fr.y + fh, w: fr.w, h: fr.h - fh });
+                        
+                        areaUsed += rect.area;
+                        currentRemaining.splice(i, 1);
+                        i--;
+                        break;
+                    }
                 }
             }
+
+            let efficiency = areaUsed / (sheet.l * sheet.w);
+            if (placed.length > 0 && efficiency > bestRun.efficiency) {
+                bestRun = { efficiency, placed, remaining: currentRemaining, sheet };
+            }
         }
-        if (placed.length === 0) break;
-        usedSheets.push({ placements: placed });
+
+        if (bestRun.placed.length === 0) {
+            console.error("Einige Teile sind zu groß für alle verfügbaren Platten!");
+            break; 
+        }
+
+        usedSheets.push({ sheet: bestRun.sheet, placements: bestRun.placed });
+        remainingRects = bestRun.remaining;
     }
+
     state.results = { usedSheets };
     renderResults();
 };
+
+/* =========================   CANVAS ZEICHNEN   ========================= */
 
 function renderResults() {
     const container = document.getElementById('results-canvas-container');
@@ -128,64 +200,60 @@ function renderResults() {
     container.classList.remove('hidden');
     list.innerHTML = '';
 
+    let totalArea = 0;
+
     state.results.usedSheets.forEach((data, i) => {
+        totalArea += (data.sheet.l * data.sheet.w) / 1000000;
+        
         const wrap = document.createElement('div');
-        wrap.className = "bg-white p-4 rounded-xl border border-slate-200 shadow-sm max-w-full overflow-hidden";
-        wrap.innerHTML = `<p class="text-[10px] font-black text-primary mb-3 uppercase tracking-tighter">Platte #${i+1} (${state.sheets[0].l}x${state.sheets[0].w}mm)</p>`;
+        wrap.className = "bg-white p-6 rounded-xl border border-slate-200 shadow-sm";
+        wrap.innerHTML = `
+            <div class="flex justify-between items-center mb-4">
+                <p class="text-xs font-black text-primary uppercase tracking-wider">Schnittplan #${i+1}</p>
+                <span class="text-sm font-bold bg-slate-100 px-3 py-1 rounded-full">${data.sheet.name} (${data.sheet.l}x${data.sheet.w}mm)</span>
+            </div>`;
         
         const canvas = document.createElement('canvas');
-        canvas.className = "w-full h-auto block mx-auto"; // Zentriert den Plan
+        canvas.className = "w-full h-auto block mx-auto rounded border border-slate-200";
         const ctx = canvas.getContext('2d');
-        
-        // Skalierung: Wir berechnen die Breite basierend auf der Container-Anzeige
-        const displayWidth = 1600; 
-        const scale = displayWidth / state.sheets[0].l;
-        canvas.width = displayWidth;
-        canvas.height = state.sheets[0].w * scale;
+        const scale = 1600 / data.sheet.l;
+        canvas.width = 1600;
+        canvas.height = data.sheet.w * scale;
 
-        // Hintergrund
         ctx.fillStyle = "#f8fafc";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         data.placements.forEach(p => {
-            const x = p.x * scale;
-            const y = p.y * scale;
-            const w = p.l * scale;
-            const h = p.w * scale;
-
-            ctx.beginPath();
-            ctx.fillStyle = "#00478d";
-            ctx.strokeStyle = "white";
-            ctx.lineWidth = 2;
-
-            if (p.shape === 'rect') {
-                ctx.rect(x, y, w, h);
-            } else if (p.shape === 'triangle') {
-                ctx.moveTo(x, y + h);
-                ctx.lineTo(x + w, y + h);
-                ctx.lineTo(x, y);
-                ctx.closePath();
-            } else if (p.shape === 'trapezoid') {
-                const w2 = (p.l2 || p.l * 0.6) * scale;
-                ctx.moveTo(x, y + h);
-                ctx.lineTo(x + w, y + h);
-                ctx.lineTo(x + w2, y);
-                ctx.lineTo(x, y);
-                ctx.closePath();
-            }
-
-            ctx.fill();
-            ctx.stroke();
-
-            // Moderne, zentrierte Beschriftung
-            ctx.fillStyle = "white";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.font = "bold 16px Inter, sans-serif";
+            const x = p.x * scale, y = p.y * scale, w = p.pw * scale, h = p.ph * scale;
             
-            // Nur zeichnen wenn Platz ist
-            if (w > 40) {
-                ctx.fillText(p.name, x + w/2, y + h/2);
+            // Box Outline (Debug)
+            // ctx.strokeStyle = "rgba(0,0,0,0.1)"; ctx.strokeRect(x,y,w,h);
+
+            if (p.type === 'triangle' && p.isPair) {
+                // Paar aus 2 Dreiecken
+                drawShape(ctx, x, y, w, h, p.items[0].name, [{x:0, y:h}, {x:w, y:h}, {x:0, y:0}]);
+                drawShape(ctx, x, y, w, h, p.items[1].name, [{x:w, y:0}, {x:0, y:0}, {x:w, y:h}], true);
+            } 
+            else if (p.type === 'trapezoid' && p.isPair) {
+                // Paar aus 2 Trapezen
+                const l1 = p.items[0].l * scale;
+                const l2 = (p.items[0].l2 || 0) * scale;
+                let wActual = p.rotatedBox ? h : w; // Wenn BoundingBox gedreht wurde, verhalten sich Längen anders
+                let hActual = p.rotatedBox ? w : h;
+                
+                drawShape(ctx, x, y, w, h, p.items[0].name, [{x:0, y:h}, {x:l1, y:h}, {x:l2, y:0}, {x:0, y:0}]);
+                drawShape(ctx, x, y, w, h, p.items[1].name, [{x:l1, y:h}, {x:w, y:h}, {x:w, y:0}, {x:l2, y:0}], true);
+            } 
+            else {
+                // Einzelne Teile (wurden nicht gepaart)
+                if (p.type === 'triangle') {
+                    drawShape(ctx, x, y, w, h, p.items[0].name, [{x:0, y:h}, {x:w, y:h}, {x:0, y:0}]);
+                } else if (p.type === 'trapezoid') {
+                    const l2 = (p.items[0].l2 || 0) * scale;
+                    drawShape(ctx, x, y, w, h, p.items[0].name, [{x:0, y:h}, {x:w, y:h}, {x:l2, y:0}, {x:0, y:0}]);
+                } else {
+                    drawShape(ctx, x, y, w, h, p.items[0].name, [{x:0, y:0}, {x:w, y:0}, {x:w, y:h}, {x:0, y:h}]); // Rect
+                }
             }
         });
         wrap.appendChild(canvas);
@@ -193,13 +261,43 @@ function renderResults() {
     });
     
     document.getElementById('stat-sheets-count').innerText = state.results.usedSheets.length;
-    document.getElementById('stat-total-area').innerText = (state.results.usedSheets.length * state.sheets[0].l * state.sheets[0].w / 1000000).toFixed(2) + " m²";
+    document.getElementById('stat-total-area').innerText = totalArea.toFixed(2) + " m²";
+}
+
+// Hilfsfunktion zum Zeichnen der Polygone
+function drawShape(ctx, bx, by, bw, bh, name, points, isFlipped = false) {
+    ctx.beginPath();
+    ctx.fillStyle = isFlipped ? "#005eb8" : "#00478d"; // Leichter Kontrast für gepaarte Teile
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 2;
+    
+    ctx.moveTo(bx + points[0].x, by + points[0].y);
+    for(let i=1; i<points.length; i++) {
+        ctx.lineTo(bx + points[i].x, by + points[i].y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Beschriftung in der Mitte der Bounding-Box berechnen (Approximation für den Schwerpunkt)
+    let centerX = bx + points.reduce((sum, p) => sum + p.x, 0) / points.length;
+    let centerY = by + points.reduce((sum, p) => sum + p.y, 0) / points.length;
+
+    if (bw > 50 && bh > 30) {
+        ctx.fillStyle = "white";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = "bold 14px Inter, sans-serif";
+        ctx.fillText(name, centerX, centerY);
+    }
 }
 
 /* =========================   INIT   ========================= */
 
 document.addEventListener("DOMContentLoaded", () => {
-    // Neues Zuschnitt-Interface
+    document.getElementById('new-calc-btn').onclick = () => location.reload();
+    
+    // Zuschnitt-Interface
     document.getElementById('cut-list-section').innerHTML = `
         <div class="bg-white p-8 rounded-xl border border-slate-200 shadow-sm mt-8">
             <h4 class="font-bold text-lg mb-6">Zuschnitte</h4>
@@ -210,7 +308,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <button onclick="window.setShape('trapezoid')" data-shape="trapezoid" class="shape-tab flex-1 py-2 rounded-lg border border-slate-200 text-xs font-bold transition-all">TRAPEZ</button>
             </div>
 
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 items-end">
                 <div class="col-span-2">
                     <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Bezeichnung</label>
                     <input id="cut-name" type="text" placeholder="z.B. Frontblende" class="w-full border-slate-200 rounded-lg text-sm p-3 focus:ring-primary">
@@ -230,11 +328,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 </div>
             </div>
             
-            <button id="add-cut-btn" class="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-black transition-all shadow-md active:scale-[0.98]">
+            <button id="add-cut-btn" class="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-black transition-all shadow-md mt-2">
                 TEIL HINZUFÜGEN
             </button>
             
-            <div id="cut-display-list" class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-2"></div>
+            <div id="cut-display-list" class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-3"></div>
         </div>
     `;
 
@@ -247,29 +345,23 @@ document.addEventListener("DOMContentLoaded", () => {
         
         if (l > 0 && w > 0) {
             state.cuts.push({ name, l, w, l2, qty, shape: state.activeShape });
-            renderCuts();
-            window.calculate();
-            document.getElementById('cut-name').value = '';
+            renderCuts(); window.calculate();
+            document.getElementById('cut-name').value = ''; // Reset name
         }
     };
 
     function renderCuts() {
         document.getElementById('cut-display-list').innerHTML = state.cuts.map((c, i) => `
-            <div class="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-100 group">
-                <div class="flex items-center gap-3">
-                    <div class="w-2 h-2 rounded-full bg-primary"></div>
-                    <div>
-                        <p class="text-sm font-bold">${c.qty}x ${c.name}</p>
-                        <p class="text-[10px] text-slate-400 uppercase">${c.shape} — ${c.l} x ${c.w} mm</p>
-                    </div>
+            <div class="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div>
+                    <p class="text-sm font-bold">${c.qty}x ${c.name}</p>
+                    <p class="text-[10px] text-slate-500 uppercase">${c.shape} | ${c.l}x${c.w}${c.l2 ? ' (Top:'+c.l2+')' : ''}</p>
                 </div>
-                <button onclick="state.cuts.splice(${i}, 1); renderCuts(); window.calculate();" class="text-error opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span class="material-symbols-outlined text-sm">close</span>
-                </button>
+                <button onclick="state.cuts.splice(${i}, 1); renderCuts(); window.calculate();" class="text-error font-bold p-2">✕</button>
             </div>
         `).join('');
     }
 
+    // Start UI
     window.addSheet();
-    document.getElementById('add-sheet-btn').onclick = window.addSheet;
 });
