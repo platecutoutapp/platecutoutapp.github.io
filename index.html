@@ -1,61 +1,92 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>OptiCut Pro</title>
-
-<script src="https://cdn.tailwindcss.com"></script>
-
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
-<style>
-body { font-family: 'Inter', sans-serif; }
-h1,h2 { font-family: 'Manrope', sans-serif; }
-</style>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>OptiCut Pro - Material-Konfiguration</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <style>
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+        h1, h2, h3, .font-headline { font-family: 'Manrope', sans-serif; }
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    </style>
+    <script id="tailwind-config">
+        tailwind.config = {
+            theme: { extend: { colors: { primary: "#00478d", error: "#ba1a1a" } } }
+        }
+    </script>
 </head>
+<body class="bg-slate-50 text-slate-900 flex min-h-screen overflow-hidden">
 
-<body class="bg-slate-50 flex">
+    <aside class="fixed left-0 top-0 h-full flex flex-col py-4 bg-slate-100 w-64 border-r z-40">
+        <div class="px-6 mb-8">
+            <h1 class="text-lg font-bold text-primary font-headline">OptiCut Pro</h1>
+            <div class="mt-4 flex items-center gap-3 bg-white p-3 rounded-xl shadow-sm border border-slate-200">
+                <div class="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-white">
+                    <span class="material-symbols-outlined">architecture</span>
+                </div>
+                <div>
+                    <p class="text-sm font-bold">Zuschnitt</p>
+                    <p class="text-[10px] text-slate-500 uppercase">Multi-Optimierung</p>
+                </div>
+            </div>
+        </div>
+        <div class="px-4 mt-auto pt-4 border-t border-slate-200">
+            <button id="new-calc-btn" class="w-full bg-slate-200 text-slate-700 py-2.5 rounded-md text-sm font-bold mb-4 hover:bg-slate-300 transition-colors">
+                Neues Projekt
+            </button>
+        </div>
+    </aside>
 
-<aside class="w-64 bg-slate-100 p-4">
-<h1 class="font-bold text-primary">OptiCut Pro</h1>
+    <main class="ml-64 flex-1 flex flex-col h-screen overflow-y-auto">
+        <header class="sticky top-0 z-30 flex justify-between items-center w-full px-8 h-16 bg-white border-b border-slate-200 shrink-0">
+            <h2 class="text-xl font-black text-primary font-headline uppercase">Konfiguration</h2>
+            <div class="flex items-center gap-4">
+                <button id="export-btn" class="flex items-center gap-2 border border-slate-300 px-4 py-2 rounded-md font-bold text-sm hover:bg-slate-50 transition-all">
+                    <span class="material-symbols-outlined text-sm">download</span> JSON EXPORT
+                </button>
+            </div>
+        </header>
 
-<button id="new-btn" class="mt-4 w-full bg-slate-200 p-2 rounded">Neues Projekt</button>
+        <div class="p-8 max-w-7xl mx-auto w-full">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <div class="lg:col-span-8 space-y-8">
+                    <div id="sheet-container" class="space-y-4"></div>
+                    <button id="add-sheet-btn" class="w-full border-2 border-dashed border-slate-300 hover:border-primary hover:bg-primary/5 transition-all py-6 rounded-xl flex items-center justify-center gap-3 text-slate-500 hover:text-primary font-bold text-sm">
+                        <span class="material-symbols-outlined">add_circle</span> Weiteres Plattenformat hinzufügen
+                    </button>
+                    
+                    <div id="cut-list-section"></div>
+                    
+                    <div id="results-canvas-container" class="space-y-6 pt-10 border-t border-slate-200 hidden">
+                        <h4 class="text-2xl font-bold font-headline">Optimierter Schnittplan</h4>
+                        <div id="canvas-list" class="space-y-8"></div>
+                    </div>
+                </div>
 
-<div class="mt-6 space-y-2">
-<label>Schnittfuge (mm)</label>
-<input id="kerf" type="number" value="3" class="w-full p-2"/>
+                <div class="lg:col-span-4 space-y-6">
+                    <div class="sticky top-24">
+                        <div class="bg-primary text-white p-6 rounded-xl shadow-lg mb-6">
+                            <h5 class="font-bold text-xs uppercase opacity-80 mb-4">Materialbedarf</h5>
+                            <div class="flex items-end gap-2">
+                                <span id="stat-sheets-count" class="text-4xl font-black font-headline">0</span>
+                                <span class="text-sm font-bold opacity-80 mb-1.5">Platten gesamt</span>
+                            </div>
+                            <div class="mt-4 flex justify-between text-[10px] font-bold uppercase">
+                                <span>Verbaute Fläche</span>
+                                <span id="stat-total-area">0.00 m²</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
 
-<label>Modus</label>
-<select id="mode" class="w-full p-2">
-<option value="free">Freies verschachteln</option>
-<option value="guillotine">Guillotine</option>
-</select>
-</div>
-
-<div class="mt-6 space-y-2">
-<button id="export-json" class="w-full bg-slate-300 p-2 rounded">JSON</button>
-<button id="export-csv" class="w-full bg-slate-300 p-2 rounded">CSV</button>
-<button id="export-pdf" class="w-full bg-slate-300 p-2 rounded">PDF</button>
-
-<input type="file" id="import-csv" class="w-full"/>
-</div>
-
-</aside>
-
-<main class="flex-1 p-6">
-
-<div id="sheet-container"></div>
-<button id="add-sheet" class="mt-4 p-2 border">+ Platte</button>
-
-<div id="cuts"></div>
-
-<div id="results" class="mt-8"></div>
-
-</main>
-
-<script src="app.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>
