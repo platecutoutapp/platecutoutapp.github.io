@@ -152,30 +152,45 @@ window.importCSV = function(file) {
 
 /* PDF-Export (mit jsPDF) */
 window.exportPDF = function() {
-    if(!window.jsPDF || state.results === null) {
-        alert("PDF-Export nicht verfügbar oder keine Ergebnisse vorhanden.");
+    if(state.results === null || !state.results.usedSheets || state.results.usedSheets.length === 0) {
+        alert("Keine Optimierungsergebnisse vorhanden. Bitte zuerst Zuschnitte hinzufügen und berechnen.");
         return;
     }
     
-    const {jsPDF} = window.jsPDF;
-    const doc = new jsPDF({orientation: 'landscape', unit: 'mm'});
-    let pageNum = 1;
+    // Überprüfe ob jsPDF verfügbar ist, ansonsten laden
+    if(!window.jsPDF) {
+        alert("PDF-Bibliothek wird noch geladen. Bitte warten und erneut versuchen.");
+        return;
+    }
     
-    state.results.usedSheets.forEach((data, idx) => {
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
+    try {
+        const {jsPDF} = window.jsPDF;
+        const doc = new jsPDF({orientation: 'landscape', unit: 'mm'});
         
-        if(idx > 0) doc.addPage();
+        // Alle Canvas-Elemente sammeln
+        const canvases = document.querySelectorAll('#canvas-list canvas');
         
-        // Header
-        doc.setFontSize(16);
-        doc.text(`Schnittplan #${idx + 1}`, 15, 15);
-        doc.setFontSize(10);
-        doc.text(`Format: ${data.sheet.name} (${data.sheet.l}x${data.sheet.w}mm)`, 15, 25);
+        if(canvases.length === 0) {
+            alert("Keine Schnittpläne zum Exportieren vorhanden.");
+            return;
+        }
         
-        // Canvas in PDF rendern
-        const canvas = document.querySelector(`canvas`);
-        if(canvas) {
+        canvases.forEach((canvas, idx) => {
+            if(idx > 0) doc.addPage();
+            
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            
+            // Header
+            doc.setFontSize(16);
+            doc.setTextColor(0, 71, 141); // Primary color
+            doc.text(`Schnittplan #${idx + 1}`, 15, 15);
+            
+            doc.setFontSize(10);
+            doc.setTextColor(0, 0, 0);
+            doc.text(`Format: ${state.results.usedSheets[idx].sheet.name} (${state.results.usedSheets[idx].sheet.l}×${state.results.usedSheets[idx].sheet.w}mm)`, 15, 25);
+            
+            // Canvas in PDF rendern
             const imgData = canvas.toDataURL('image/png');
             const maxWidth = pageWidth - 30;
             const maxHeight = pageHeight - 40;
@@ -187,10 +202,57 @@ window.exportPDF = function() {
                 width = height * ratio;
             }
             doc.addImage(imgData, 'PNG', 15, 35, width, height);
-        }
-    });
-    
-    doc.save(`schnittplan_${new Date().toISOString().split('T')[0]}.pdf`);
+            
+            // Footer mit Statistiken
+            doc.setFontSize(8);
+            doc.setTextColor(100, 100, 100);
+            const footerY = pageHeight - 10;
+            doc.text(`Erstellt: ${new Date().toLocaleString('de-DE')} | Seite ${idx + 1}/${canvases.length}`, 15, footerY);
+        });
+        
+        // Zusätzliche Seite mit Statistiken
+        doc.addPage();
+        doc.setFontSize(14);
+        doc.setTextColor(0, 71, 141);
+        doc.text("Schnittplan-Statistik", 15, 15);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+        let yPos = 30;
+        const lineHeight = 7;
+        
+        doc.text(`Gesamtplatten: ${state.results.usedSheets.length}`, 15, yPos);
+        yPos += lineHeight;
+        doc.text(`Gesamtfläche: ${state.statistics.totalArea.toFixed(2)} m²`, 15, yPos);
+        yPos += lineHeight;
+        doc.text(`Genutzte Fläche: ${state.statistics.usedArea.toFixed(2)} m² (${(state.statistics.usedArea/state.statistics.totalArea*100).toFixed(1)}%)`, 15, yPos);
+        yPos += lineHeight;
+        doc.text(`Verschnittfläche: ${state.statistics.wasteArea.toFixed(2)} m² (${state.statistics.wastePercent.toFixed(1)}%)`, 15, yPos);
+        yPos += lineHeight * 2;
+        
+        doc.setFontSize(10);
+        doc.setTextColor(0, 71, 141);
+        doc.text("Zuschnittliste:", 15, yPos);
+        yPos += lineHeight;
+        
+        doc.setFontSize(9);
+        doc.setTextColor(0, 0, 0);
+        state.cuts.forEach(cut => {
+            const text = `${cut.qty}× ${cut.name} (${cut.shape}: ${cut.l}×${cut.w}mm)`;
+            doc.text(text, 20, yPos);
+            yPos += lineHeight;
+            if(yPos > 270) {
+                doc.addPage();
+                yPos = 15;
+            }
+        });
+        
+        doc.save(`schnittplan_${new Date().toISOString().split('T')[0]}.pdf`);
+        alert("PDF erfolgreich exportiert!");
+    } catch(error) {
+        console.error("PDF Export Fehler:", error);
+        alert("Fehler beim PDF-Export: " + error.message);
+    }
 };
 
 /* =========================   ALGORITHMUS (Multi-Bin & Pairing) ========================= */
