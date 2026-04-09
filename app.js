@@ -321,7 +321,7 @@ window.calculate = function() {
     if(state.cuttingMode === 'guillotine') {
         usedSheets = packGuillotine(remainingRects, state.sheets, state.sawBladeThickness);
     } else {
-        // Freier Packing-Modus
+        // Freier Packing-Modus - OPTIMIERT FÜR VOLLSTÄNDIGE PLATTENAUSNUTZUNG
         while (remainingRects.length > 0) {
             let bestRun = { efficiency: -1, placed: [], remaining: [], sheet: null };
 
@@ -335,12 +335,19 @@ window.calculate = function() {
                     let rect = currentRemaining[i];
                     let fits = false, fw = rect.l, fh = rect.w, rotated = false;
 
-                    // Sortiere freie Räume (kleinste passendste zuerst)
-                    freeSpace.sort((a,b) => (a.w*a.h) - (b.w*b.h));
+                    // Sortiere freie Räume (beste Anpassung zuerst - größte Räume mit ähnlichen Proportionen)
+                    freeSpace.sort((a,b) => {
+                        // Räume die passen, nach "Verschwendung" sortieren (weniger Leerraum = besser)
+                        let wasteA = (a.w - fw) + (a.h - fh);
+                        let wasteB = (b.w - fw) + (b.h - fh);
+                        return wasteA - wasteB;
+                    });
 
                     for (let j = 0; j < freeSpace.length; j++) {
                         let fr = freeSpace[j];
-                        if (fw + state.sawBladeThickness <= fr.w && fh + state.sawBladeThickness <= fr.h) { fits = true; } 
+                        if (fw + state.sawBladeThickness <= fr.w && fh + state.sawBladeThickness <= fr.h) { 
+                            fits = true; 
+                        } 
                         else if (sheet.canRotate && fh + state.sawBladeThickness <= fr.w && fw + state.sawBladeThickness <= fr.h) { 
                             fits = true; [fw, fh] = [fh, fw]; rotated = true; 
                         }
@@ -349,11 +356,25 @@ window.calculate = function() {
                             placed.push({ ...rect, x: fr.x, y: fr.y, pw: fw, ph: fh, rotatedBox: rotated });
                             freeSpace.splice(j, 1);
                             
-                            // Restraum aufteilen (mit Schnittfuge berücksichtigen)
-                            if (fr.w - fw - state.sawBladeThickness > 0) 
-                                freeSpace.push({ x: fr.x + fw + state.sawBladeThickness, y: fr.y, w: fr.w - fw - state.sawBladeThickness, h: fh });
-                            if (fr.h - fh - state.sawBladeThickness > 0) 
-                                freeSpace.push({ x: fr.x, y: fr.y + fh + state.sawBladeThickness, w: fr.w, h: fr.h - fh - state.sawBladeThickness });
+                            // Restraum aufteilen OPTIMIERT: Erzeuge maximal 2 neue Räume für bessere Packung
+                            let rightSpace = fr.w - fw - state.sawBladeThickness;
+                            let bottomSpace = fr.h - fh - state.sawBladeThickness;
+                            
+                            // Größerer Raum zuerst hinzufügen
+                            if (rightSpace > 0 && bottomSpace > 0) {
+                                if (rightSpace * fr.h > bottomSpace * fw) {
+                                    freeSpace.push({ x: fr.x + fw + state.sawBladeThickness, y: fr.y, w: rightSpace, h: fr.h });
+                                    freeSpace.push({ x: fr.x, y: fr.y + fh + state.sawBladeThickness, w: fw, h: bottomSpace });
+                                } else {
+                                    freeSpace.push({ x: fr.x, y: fr.y + fh + state.sawBladeThickness, w: fr.w, h: bottomSpace });
+                                    freeSpace.push({ x: fr.x + fw + state.sawBladeThickness, y: fr.y, w: rightSpace, h: fh });
+                                }
+                            } else {
+                                if (rightSpace > 0) 
+                                    freeSpace.push({ x: fr.x + fw + state.sawBladeThickness, y: fr.y, w: rightSpace, h: fr.h });
+                                if (bottomSpace > 0) 
+                                    freeSpace.push({ x: fr.x, y: fr.y + fh + state.sawBladeThickness, w: fr.w, h: bottomSpace });
+                            }
                             
                             // NEU: Wenn es ein ungerades Dreieck ist, nutze das leere "Gegen-Dreieck"
                             if (rect.type === 'triangle' && !rect.isPair) {
@@ -375,7 +396,8 @@ window.calculate = function() {
                 }
 
                 let efficiency = areaUsed / (sheet.l * sheet.w);
-                if (placed.length > 0 && efficiency > bestRun.efficiency) {
+                // WICHTIG: Bevorzuge Blätter mit höherer Effizienz, aber akzeptiere auch Blätter mit mehr platzierten Teilen
+                if (placed.length > bestRun.placed.length || (placed.length === bestRun.placed.length && efficiency > bestRun.efficiency)) {
                     bestRun = { efficiency, placed, remaining: currentRemaining, sheet };
                 }
             }
