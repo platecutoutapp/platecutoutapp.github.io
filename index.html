@@ -11,10 +11,9 @@
         .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
         body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
         h1, h2, h3, .font-headline { font-family: 'Manrope', sans-serif; }
-        .ghost-border-bottom { border-bottom: 1px solid rgba(194, 198, 212, 0.2); }
-        .ghost-border-bottom:focus-within { border-bottom: 2px solid #00478d; }
         input[type=number]::-webkit-inner-spin-button, 
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        .canvas-container canvas { max-width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
     </style>
     <script id="tailwind-config">
         tailwind.config = {
@@ -38,7 +37,7 @@
 </head>
 <body class="bg-surface text-on-surface flex min-h-screen overflow-hidden">
 
-    <aside class="fixed left-0 top-0 h-full flex flex-col py-4 bg-slate-100 dark:bg-slate-950 w-64 border-r z-40">
+    <aside class="fixed left-0 top-0 h-full flex flex-col py-4 bg-slate-100 w-64 border-r z-40">
         <div class="px-6 mb-8">
             <h1 class="text-lg font-bold text-primary font-headline">OptiCut Pro</h1>
             <div class="mt-4 flex items-center gap-3 bg-white p-3 rounded-xl shadow-sm">
@@ -47,16 +46,22 @@
                 </div>
                 <div>
                     <p class="text-sm font-bold">Project Alpha-24</p>
-                    <p class="text-[10px] text-slate-500 uppercase">Aluminum 6061</p>
+                    <p class="text-[10px] text-slate-500 uppercase">Materialoptimierung</p>
                 </div>
             </div>
         </div>
         <nav class="flex-1 space-y-1">
-            <a class="flex items-center gap-3 px-6 py-3 bg-white text-primary shadow-sm rounded-l-lg ml-2 font-medium text-sm" href="#"><span class="material-symbols-outlined">inventory_2</span><span>Materials</span></a>
-            <a class="flex items-center gap-3 px-6 py-3 text-slate-600 hover:text-primary transition-colors text-sm" href="#"><span class="material-symbols-outlined">format_list_bulleted</span><span>Cut List</span></a>
+            <a class="flex items-center gap-3 px-6 py-3 bg-white text-primary shadow-sm rounded-l-lg ml-2 font-medium text-sm" href="#">
+                <span class="material-symbols-outlined">inventory_2</span><span>Material</span>
+            </a>
+            <a class="flex items-center gap-3 px-6 py-3 text-slate-600 hover:text-primary transition-colors text-sm" href="#">
+                <span class="material-symbols-outlined">format_list_bulleted</span><span>Zuschnittliste</span>
+            </a>
         </nav>
         <div class="px-4 mt-auto pt-4 border-t border-slate-200">
-            <button onclick="location.reload()" class="w-full bg-primary text-white py-2.5 rounded-md text-sm font-bold mb-4 active:scale-95 transition-all">New Calculation</button>
+            <button id="new-calc-btn" class="w-full bg-slate-200 text-slate-700 py-2.5 rounded-md text-sm font-bold mb-4 active:scale-95 transition-all hover:bg-slate-300">
+                New Calculation
+            </button>
         </div>
     </aside>
 
@@ -64,7 +69,9 @@
         <header class="sticky top-0 z-30 flex justify-between items-center w-full px-8 h-16 bg-white border-b border-slate-200 shrink-0">
             <h2 class="text-xl font-black text-primary font-headline uppercase">Konfiguration</h2>
             <div class="flex items-center gap-4">
-                <button id="optimize-btn" class="bg-primary px-6 py-2 text-white rounded-md font-bold text-sm hover:bg-primary-container transition-all">OPTIMIEREN</button>
+                <button id="export-btn" class="flex items-center gap-2 border border-slate-300 px-4 py-2 rounded-md font-bold text-sm hover:bg-slate-50 transition-all">
+                    <span class="material-symbols-outlined text-sm">download</span> EXPORT
+                </button>
                 <div class="w-8 h-8 rounded-full bg-slate-200 border-2 border-primary-container"></div>
             </div>
         </header>
@@ -82,252 +89,50 @@
 
                     <button id="add-sheet-btn" class="w-full border-2 border-dashed border-slate-300 hover:border-primary hover:bg-primary/5 transition-all py-6 rounded-xl flex items-center justify-center gap-3 text-slate-500 hover:text-primary group">
                         <span class="material-symbols-outlined">add_circle</span>
-                        <span class="font-bold text-sm">Neues Plattenformat hinzufügen</span>
+                        <span class="font-bold text-sm">Weiteres Plattenformat hinzufügen</span>
                     </button>
 
                     <div id="cut-list-section">
                         </div>
 
                     <div id="results-canvas-container" class="space-y-6 pt-10 border-t border-slate-200 hidden">
-                        <h4 class="text-2xl font-bold font-headline">Optimierter Schnittplan</h4>
+                        <div class="flex justify-between items-center">
+                            <h4 class="text-2xl font-bold font-headline">Optimierter Schnittplan</h4>
+                        </div>
+                        <div id="canvas-list" class="space-y-8"></div>
                     </div>
                 </div>
 
                 <div class="lg:col-span-4 space-y-6">
-                    <div class="bg-primary text-white p-6 rounded-xl shadow-lg">
-                        <h5 class="font-bold text-xs uppercase opacity-80 mb-4">Live-Status</h5>
-                        <div class="flex items-end gap-2">
-                            <span id="stat-sheets-count" class="text-4xl font-black font-headline">0</span>
-                            <span class="text-sm font-bold opacity-80 mb-1.5">Platten verbraucht</span>
+                    <div class="sticky top-24">
+                        <div class="bg-primary text-white p-6 rounded-xl shadow-lg mb-6">
+                            <h5 class="font-bold text-xs uppercase opacity-80 mb-4">Live-Status (Automatisch)</h5>
+                            <div class="flex items-end gap-2">
+                                <span id="stat-sheets-count" class="text-4xl font-black font-headline">0</span>
+                                <span class="text-sm font-bold opacity-80 mb-1.5">Platten benötigt</span>
+                            </div>
+                            <div class="mt-4 pt-4 border-t border-white/10 flex justify-between text-[10px] font-bold uppercase">
+                                <span>Verschnittanteil</span>
+                                <span id="stat-waste-percent">0 %</span>
+                            </div>
+                            <div class="mt-2 flex justify-between text-[10px] font-bold uppercase">
+                                <span>Gesamtfläche</span>
+                                <span id="stat-total-area">0.00 m²</span>
+                            </div>
                         </div>
-                        <div class="mt-4 pt-4 border-t border-white/10 flex justify-between text-[10px] font-bold uppercase">
-                            <span>Gesamtfläche</span>
-                            <span id="stat-total-area">0.00 m²</span>
-                        </div>
-                    </div>
 
-                    <div class="bg-slate-100 p-6 rounded-xl border border-slate-200">
-                        <h5 class="font-bold text-sm mb-4">Anleitung</h5>
-                        <p class="text-xs text-slate-600 leading-relaxed">
-                            1. Definieren Sie Ihre Rohmaterialien.<br>
-                            2. Fügen Sie die gewünschten Zuschnitte hinzu.<br>
-                            3. Klicken Sie auf <b>Optimieren</b> für das Ergebnis.
-                        </p>
+                        <div class="bg-slate-100 p-6 rounded-xl border border-slate-200">
+                            <h5 class="font-bold text-sm mb-4">Hinweise</h5>
+                            <ul class="text-xs text-slate-600 space-y-2 list-disc ml-4">
+                                <li>Die Berechnung erfolgt <b>automatisch</b> bei jeder Änderung.</li>
+                                <li>Plattennamen werden in der Liste automatisch nummeriert.</li>
+                                <li>Die Vorschau zeigt die Namen der Zuschnitte direkt auf der Fläche an.</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </main>
-
-    <script>
-        /* =========================   STATE   ========================= */
-        const state = {
-            sheets: [],
-            cuts: [],
-            results: null
-        };
-
-        /* =========================   UI TEMPLATES   ========================= */
-        function createSheetHTML(index) {
-            return `
-            <section class="sheet-card bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative" data-index="${index}">
-                <div class="flex items-center justify-between mb-6">
-                    <div class="flex items-center gap-3">
-                        <span class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-primary font-bold text-sm">${index + 1}</span>
-                        <input class="sheet-name font-bold text-lg bg-transparent border-none p-0 focus:ring-0" value="Standardformat ${index + 1}">
-                    </div>
-                    <button onclick="removeSheet(${index})" class="text-error hover:bg-error/10 p-2 rounded-full transition-colors">
-                        <span class="material-symbols-outlined">delete</span>
-                    </button>
-                </div>
-                <div class="grid grid-cols-3 gap-4">
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Länge (mm)</label>
-                        <input class="sheet-l w-full bg-slate-50 border-none rounded p-2 font-bold text-primary" type="number" value="2500">
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Breite (mm)</label>
-                        <input class="sheet-w w-full bg-slate-50 border-none rounded p-2 font-bold text-primary" type="number" value="1250">
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Anzahl</label>
-                        <input class="sheet-qty w-full bg-slate-50 border-none rounded p-2 font-bold text-primary" type="number" value="5">
-                    </div>
-                </div>
-                <div class="mt-4 flex items-center gap-2">
-                    <input type="checkbox" class="sheet-grain rounded text-primary focus:ring-primary" id="grain-${index}" checked>
-                    <label for="grain-${index}" class="text-xs font-medium text-slate-600">Maserung beachten (Rotation 180°)</label>
-                </div>
-            </section>`;
-        }
-
-        /* =========================   LOGIK   ========================= */
-        function addSheet() {
-            const container = document.getElementById('sheet-container');
-            const index = container.children.length;
-            const div = document.createElement('div');
-            div.innerHTML = createSheetHTML(index);
-            container.appendChild(div.firstElementChild);
-        }
-
-        function removeSheet(index) {
-            const container = document.getElementById('sheet-container');
-            container.children[index]?.remove();
-            // Re-Index
-            Array.from(container.children).forEach((child, i) => {
-                child.setAttribute('data-index', i);
-                child.querySelector('.w-8.h-8').innerText = i + 1;
-            });
-        }
-
-        function createCutListUI() {
-            const container = document.getElementById('cut-list-section');
-            container.className = "bg-white p-8 rounded-xl border border-slate-200 mt-8";
-            container.innerHTML = `
-                <h4 class="font-bold text-lg mb-6">Zuschnittliste</h4>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                    <input id="cut-name" type="text" placeholder="Teil-Name" class="md:col-span-1 border-slate-200 rounded">
-                    <input id="cut-l" type="number" placeholder="Länge (mm)" class="border-slate-200 rounded">
-                    <input id="cut-w" type="number" placeholder="Breite (mm)" class="border-slate-200 rounded">
-                    <input id="cut-qty" type="number" placeholder="Anzahl" class="border-slate-200 rounded">
-                </div>
-                <button id="add-cut-btn" class="bg-slate-800 text-white px-6 py-2 rounded font-bold text-sm hover:bg-black transition-all w-full md:w-auto">
-                    TEIL HINZUFÜGEN
-                </button>
-                <div id="cut-display-list" class="mt-8 space-y-2"></div>
-            `;
-
-            document.getElementById('add-cut-btn').onclick = () => {
-                const name = document.getElementById('cut-name').value || "Teil";
-                const l = parseFloat(document.getElementById('cut-l').value);
-                const w = parseFloat(document.getElementById('cut-w').value);
-                const qty = parseInt(document.getElementById('cut-qty').value);
-
-                if (l > 0 && w > 0 && qty > 0) {
-                    state.cuts.push({ name, l, w, qty });
-                    renderCutList();
-                    // Reset
-                    document.getElementById('cut-l').value = '';
-                    document.getElementById('cut-w').value = '';
-                    document.getElementById('cut-qty').value = '1';
-                }
-            };
-        }
-
-        function renderCutList() {
-            const list = document.getElementById('cut-display-list');
-            list.innerHTML = state.cuts.map((cut, i) => `
-                <div class="flex justify-between items-center bg-slate-50 p-3 rounded border border-slate-100">
-                    <span class="text-sm font-medium"><b>${cut.qty}x</b> ${cut.name} (${cut.l} x ${cut.w} mm)</span>
-                    <button onclick="state.cuts.splice(${i}, 1); renderCutList();" class="text-error text-xs font-bold">LÖSCHEN</button>
-                </div>
-            `).join('');
-        }
-
-        /* =========================   ALGORITHMUS   ========================= */
-        function calculate() {
-            // Read Sheets from UI
-            state.sheets = Array.from(document.querySelectorAll('.sheet-card')).map(card => ({
-                l: parseFloat(card.querySelector('.sheet-l').value),
-                w: parseFloat(card.querySelector('.sheet-w').value),
-                qty: parseInt(card.querySelector('.sheet-qty').value),
-                grain: card.querySelector('.sheet-grain').checked
-            }));
-
-            if (state.cuts.length === 0) return alert("Bitte Schnitte hinzufügen!");
-
-            let allCuts = [];
-            state.cuts.forEach(c => {
-                for(let i=0; i<c.qty; i++) allCuts.push({...c});
-            });
-            // Sort: Größte Fläche zuerst
-            allCuts.sort((a, b) => (b.l * b.w) - (a.l * a.w));
-
-            let usedSheets = [];
-            let remainingCuts = [...allCuts];
-
-            for (let sDef of state.sheets) {
-                for (let q = 0; q < sDef.qty; q++) {
-                    if (remainingCuts.length === 0) break;
-
-                    let placed = [];
-                    let freeRects = [{ x: 0, y: 0, w: sDef.l, h: sDef.w }];
-
-                    for (let i = 0; i < remainingCuts.length; i++) {
-                        let cut = remainingCuts[i];
-                        for (let j = 0; j < freeRects.length; j++) {
-                            let fr = freeRects[j];
-                            let fits = false;
-                            let fw = cut.l, fh = cut.w;
-
-                            if (fw <= fr.w && fh <= fr.h) {
-                                fits = true;
-                            } else if (!sDef.grain && fh <= fr.w && fw <= fr.h) {
-                                fits = true;
-                                [fw, fh] = [fh, fw];
-                            }
-
-                            if (fits) {
-                                placed.push({ ...cut, x: fr.x, y: fr.y, pw: fw, ph: fh });
-                                freeRects.splice(j, 1);
-                                if (fr.w - fw > 0) freeRects.push({ x: fr.x + fw, y: fr.y, w: fr.w - fw, h: fh });
-                                if (fr.h - fh > 0) freeRects.push({ x: fr.x, y: fr.y + fh, w: fr.w, h: fr.h - fh });
-                                remainingCuts.splice(i, 1);
-                                i--;
-                                break;
-                            }
-                        }
-                    }
-                    if (placed.length > 0) usedSheets.push({ sheet: sDef, placements: placed });
-                }
-            }
-            state.results = { usedSheets, totalArea: usedSheets.reduce((sum, s) => sum + (s.sheet.l * s.sheet.w), 0) / 1000000 };
-            renderVisuals();
-        }
-
-        function renderVisuals() {
-            const container = document.getElementById('results-canvas-container');
-            container.classList.remove('hidden');
-            container.innerHTML = '<h4 class="text-2xl font-bold font-headline mb-6">Optimierter Schnittplan</h4>';
-
-            state.results.usedSheets.forEach((data, i) => {
-                const wrapper = document.createElement('div');
-                wrapper.className = "bg-white p-4 rounded-lg border shadow-sm";
-                wrapper.innerHTML = `<p class="text-xs font-bold text-slate-400 mb-2 uppercase">Platte #${i+1} (${data.sheet.l}x${data.sheet.w}mm)</p>`;
-                
-                const canvas = document.createElement('canvas');
-                canvas.className = "w-full h-auto border";
-                const ctx = canvas.getContext('2d');
-                const scale = 1000 / data.sheet.l;
-                canvas.width = 1000;
-                canvas.height = data.sheet.w * scale;
-
-                ctx.fillStyle = "#f8fafc";
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                data.placements.forEach(p => {
-                    ctx.fillStyle = "#00478d";
-                    ctx.strokeStyle = "white";
-                    ctx.lineWidth = 2;
-                    ctx.fillRect(p.x * scale, p.y * scale, p.pw * scale, p.ph * scale);
-                    ctx.strokeRect(p.x * scale, p.y * scale, p.pw * scale, p.ph * scale);
-                });
-                wrapper.appendChild(canvas);
-                container.appendChild(wrapper);
-            });
-
-            document.getElementById('stat-sheets-count').innerText = state.results.usedSheets.length;
-            document.getElementById('stat-total-area').innerText = state.results.totalArea.toFixed(2) + " m²";
-            container.scrollIntoView({ behavior: 'smooth' });
-        }
-
-        /* =========================   INIT   ========================= */
-        document.addEventListener("DOMContentLoaded", () => {
-            addSheet();
-            createCutListUI();
-            document.getElementById('add-sheet-btn').onclick = addSheet;
-            document.getElementById('optimize-btn').onclick = calculate;
-        });
-    </script>
 </body>
 </html>
