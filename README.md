@@ -5,3 +5,4 @@ ToDo:
 - CSV/Excel-Import und Export von Stücklisten/Schnittlisten (Tabelle parsen und die Teile direkt in state.cuts laden)
 - Zuschnitte löschen mit dem "X"-Button daneben wird nicht direkt aktualisiert
 - Platzierungsalgorithmus für Dreiecke und Trapeze verbessern, so dass intern nicht mehr mit Rechtecken gearbeitet wird.
+- Gesamtfläche, genutzte Fläche und Verschnittfläche (absolut und in Prozent) anzeigen
