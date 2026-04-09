@@ -3,7 +3,8 @@ const state = {
     sheets: [], 
     cuts: [],   
     results: null,
-    activeShape: 'rect'
+    activeShape: 'rect',
+    hasChanges: false // Neu: Trackt ungespeicherte Änderungen
 };
 
 /* =========================   UI TEMPLATES   ========================= */
@@ -32,7 +33,7 @@ function createSheetHTML(index) {
             </div>
         </div>
         <div class="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
-            <span class="text-xs font-medium text-slate-500">Maserung / Rotation erlauben (90°)</span>
+            <span class="text-xs font-medium text-slate-500">Rotation erlauben (90°)</span>
             <input type="checkbox" class="sheet-grain rounded text-primary" onchange="window.calculate()">
         </div>
     </section>`;
@@ -46,7 +47,7 @@ window.addSheet = function() {
     const div = document.createElement('div');
     div.innerHTML = createSheetHTML(index);
     container.appendChild(div.firstElementChild);
-    window.calculate();
+    if(state.hasChanges) window.calculate(); // Nur triggern wenn schon initialisiert
 };
 
 window.removeSheet = function(index) {
@@ -75,14 +76,13 @@ window.setShape = function(shape) {
 
 /* =========================   ALGORITHMUS (Multi-Bin & Pairing) ========================= */
 
-// Kombiniert passende Dreiecke/Trapeze zu Rechtecken
 function preprocessCuts(cuts) {
     let pool = [];
     cuts.forEach(c => { for(let i=0; i<c.qty; i++) pool.push({...c, id: Math.random()}); });
 
     let rectsToPack = [];
 
-    // 1. Dreiecke paaren (180° gedreht ergeben sie ein Rechteck L x W)
+    // Dreiecke paaren
     let triangles = pool.filter(c => c.shape === 'triangle');
     pool = pool.filter(c => c.shape !== 'triangle');
     while(triangles.length > 0) {
@@ -92,11 +92,12 @@ function preprocessCuts(cuts) {
             let t2 = triangles.splice(matchIdx, 1)[0];
             rectsToPack.push({ isPair: true, type: 'triangle', l: t1.l, w: t1.w, area: t1.l*t1.w, items: [t1, t2] });
         } else {
-            rectsToPack.push({ isPair: false, type: 'triangle', l: t1.l, w: t1.w, area: t1.l*t1.w, items: [t1] });
+            // Ungerades Dreieck -> Nimmt Rechteck-Platz ein, wir geben später den leeren Raum zurück!
+            rectsToPack.push({ isPair: false, type: 'triangle', l: t1.l, w: t1.w, area: (t1.l*t1.w)/2, items: [t1] });
         }
     }
 
-    // 2. Trapeze paaren (Fügt man 2 identische Trapeze gedreht zusammen, wird es ein Rechteck (L+L2) x W)
+    // Trapeze paaren
     let trapezoids = pool.filter(c => c.shape === 'trapezoid');
     pool = pool.filter(c => c.shape !== 'trapezoid');
     while(trapezoids.length > 0) {
@@ -111,14 +112,12 @@ function preprocessCuts(cuts) {
         }
     }
 
-    // 3. Rechtecke hinzufügen
     pool.forEach(r => rectsToPack.push({ isPair: false, type: 'rect', l: r.l, w: r.w, area: r.l*r.w, items: [r] }));
-
-    // Nach Fläche sortieren (größte zuerst)
     return rectsToPack.sort((a,b) => b.area - a.area);
 }
 
 window.calculate = function() {
+    state.hasChanges = true;
     state.sheets = Array.from(document.querySelectorAll('.sheet-card')).map(card => ({
         name: card.querySelector('.sheet-name').value,
         l: parseFloat(card.querySelector('.sheet-l').value) || 0,
@@ -134,7 +133,6 @@ window.calculate = function() {
     let remainingRects = preprocessCuts(state.cuts);
     let usedSheets = [];
 
-    // Multi-Bin Algorithm: Wähle Platte, die pro Schritt am vollsten wird
     while (remainingRects.length > 0) {
         let bestRun = { efficiency: -1, placed: [], remaining: [], sheet: null };
 
@@ -146,25 +144,38 @@ window.calculate = function() {
 
             for (let i = 0; i < currentRemaining.length; i++) {
                 let rect = currentRemaining[i];
-                let fits = false;
-                let fw = rect.l, fh = rect.w;
-                let rotated = false;
+                let fits = false, fw = rect.l, fh = rect.w, rotated = false;
+
+                // Sortiere freie Räume (kleinste passendste zuerst)
+                freeSpace.sort((a,b) => (a.w*a.h) - (b.w*b.h));
 
                 for (let j = 0; j < freeSpace.length; j++) {
                     let fr = freeSpace[j];
-                    if (fw <= fr.w && fh <= fr.h) {
-                        fits = true;
-                    } else if (sheet.canRotate && fh <= fr.w && fw <= fr.h) {
-                        fits = true; [fw, fh] = [fh, fw]; rotated = true;
-                    }
+                    if (fw <= fr.w && fh <= fr.h) { fits = true; } 
+                    else if (sheet.canRotate && fh <= fr.w && fw <= fr.h) { fits = true; [fw, fh] = [fh, fw]; rotated = true; }
 
                     if (fits) {
                         placed.push({ ...rect, x: fr.x, y: fr.y, pw: fw, ph: fh, rotatedBox: rotated });
                         freeSpace.splice(j, 1);
+                        
                         // Restraum aufteilen
                         if (fr.w - fw > 0) freeSpace.push({ x: fr.x + fw, y: fr.y, w: fr.w - fw, h: fh });
                         if (fr.h - fh > 0) freeSpace.push({ x: fr.x, y: fr.y + fh, w: fr.w, h: fr.h - fh });
                         
+                        // NEU: Wenn es ein ungerades Dreieck ist, nutze das leere "Gegen-Dreieck"
+                        if (rect.type === 'triangle' && !rect.isPair) {
+                            // Wir können ein Rechteck einfügen, das B/2 und H/2 groß ist (größtes einschreibbares Rechteck im leeren Dreieck)
+                            let subW = fw / 2;
+                            let subH = fh / 2;
+                            // Da der rechte Winkel des gezeichneten Dreiecks unten links ist (0, h)
+                            // befindet sich der nutzbare leere Raum oben rechts.
+                            if(!rotated) {
+                                freeSpace.push({ x: fr.x + subW, y: fr.y, w: subW, h: subH });
+                            } else {
+                                freeSpace.push({ x: fr.x + subW, y: fr.y + subH, w: subW, h: subH });
+                            }
+                        }
+
                         areaUsed += rect.area;
                         currentRemaining.splice(i, 1);
                         i--;
@@ -179,11 +190,7 @@ window.calculate = function() {
             }
         }
 
-        if (bestRun.placed.length === 0) {
-            console.error("Einige Teile sind zu groß für alle verfügbaren Platten!");
-            break; 
-        }
-
+        if (bestRun.placed.length === 0) break; // Endlosschleife verhindern
         usedSheets.push({ sheet: bestRun.sheet, placements: bestRun.placed });
         remainingRects = bestRun.remaining;
     }
@@ -225,35 +232,20 @@ function renderResults() {
 
         data.placements.forEach(p => {
             const x = p.x * scale, y = p.y * scale, w = p.pw * scale, h = p.ph * scale;
-            
-            // Box Outline (Debug)
-            // ctx.strokeStyle = "rgba(0,0,0,0.1)"; ctx.strokeRect(x,y,w,h);
 
             if (p.type === 'triangle' && p.isPair) {
-                // Paar aus 2 Dreiecken
                 drawShape(ctx, x, y, w, h, p.items[0].name, [{x:0, y:h}, {x:w, y:h}, {x:0, y:0}]);
                 drawShape(ctx, x, y, w, h, p.items[1].name, [{x:w, y:0}, {x:0, y:0}, {x:w, y:h}], true);
             } 
             else if (p.type === 'trapezoid' && p.isPair) {
-                // Paar aus 2 Trapezen
-                const l1 = p.items[0].l * scale;
-                const l2 = (p.items[0].l2 || 0) * scale;
-                let wActual = p.rotatedBox ? h : w; // Wenn BoundingBox gedreht wurde, verhalten sich Längen anders
-                let hActual = p.rotatedBox ? w : h;
-                
+                const l1 = p.items[0].l * scale, l2 = (p.items[0].l2 || 0) * scale;
                 drawShape(ctx, x, y, w, h, p.items[0].name, [{x:0, y:h}, {x:l1, y:h}, {x:l2, y:0}, {x:0, y:0}]);
                 drawShape(ctx, x, y, w, h, p.items[1].name, [{x:l1, y:h}, {x:w, y:h}, {x:w, y:0}, {x:l2, y:0}], true);
             } 
             else {
-                // Einzelne Teile (wurden nicht gepaart)
-                if (p.type === 'triangle') {
-                    drawShape(ctx, x, y, w, h, p.items[0].name, [{x:0, y:h}, {x:w, y:h}, {x:0, y:0}]);
-                } else if (p.type === 'trapezoid') {
-                    const l2 = (p.items[0].l2 || 0) * scale;
-                    drawShape(ctx, x, y, w, h, p.items[0].name, [{x:0, y:h}, {x:w, y:h}, {x:l2, y:0}, {x:0, y:0}]);
-                } else {
-                    drawShape(ctx, x, y, w, h, p.items[0].name, [{x:0, y:0}, {x:w, y:0}, {x:w, y:h}, {x:0, y:h}]); // Rect
-                }
+                if (p.type === 'triangle') drawShape(ctx, x, y, w, h, p.items[0].name, [{x:0, y:h}, {x:w, y:h}, {x:0, y:0}]);
+                else if (p.type === 'trapezoid') drawShape(ctx, x, y, w, h, p.items[0].name, [{x:0, y:h}, {x:w, y:h}, {x:(p.items[0].l2||0)*scale, y:0}, {x:0, y:0}]);
+                else drawShape(ctx, x, y, w, h, p.items[0].name, [{x:0, y:0}, {x:w, y:0}, {x:w, y:h}, {x:0, y:h}]);
             }
         });
         wrap.appendChild(canvas);
@@ -264,50 +256,55 @@ function renderResults() {
     document.getElementById('stat-total-area').innerText = totalArea.toFixed(2) + " m²";
 }
 
-// Hilfsfunktion zum Zeichnen der Polygone
 function drawShape(ctx, bx, by, bw, bh, name, points, isFlipped = false) {
     ctx.beginPath();
-    ctx.fillStyle = isFlipped ? "#005eb8" : "#00478d"; // Leichter Kontrast für gepaarte Teile
+    ctx.fillStyle = isFlipped ? "#005eb8" : "#00478d"; 
     ctx.strokeStyle = "white";
     ctx.lineWidth = 2;
-    
     ctx.moveTo(bx + points[0].x, by + points[0].y);
-    for(let i=1; i<points.length; i++) {
-        ctx.lineTo(bx + points[i].x, by + points[i].y);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+    for(let i=1; i<points.length; i++) ctx.lineTo(bx + points[i].x, by + points[i].y);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
 
-    // Beschriftung in der Mitte der Bounding-Box berechnen (Approximation für den Schwerpunkt)
     let centerX = bx + points.reduce((sum, p) => sum + p.x, 0) / points.length;
     let centerY = by + points.reduce((sum, p) => sum + p.y, 0) / points.length;
-
     if (bw > 50 && bh > 30) {
-        ctx.fillStyle = "white";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.font = "bold 14px Inter, sans-serif";
-        ctx.fillText(name, centerX, centerY);
+        ctx.fillStyle = "white"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.font = "bold 14px Inter, sans-serif"; ctx.fillText(name, centerX, centerY);
     }
 }
 
 /* =========================   INIT   ========================= */
 
 document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById('new-calc-btn').onclick = () => location.reload();
     
+    // Neues Projekt Dialog
+    document.getElementById('new-calc-btn').onclick = () => {
+        if (!state.hasChanges || confirm("Es gibt ungespeicherte Änderungen. Möchtest du wirklich ein neues Projekt starten?")) {
+            location.reload();
+        }
+    };
+
+    // Export Funktion
+    document.getElementById('export-btn').onclick = () => {
+        if(state.cuts.length === 0) return alert("Keine Daten zum Exportieren vorhanden.");
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+        const anchor = document.createElement('a');
+        anchor.setAttribute("href", dataStr);
+        anchor.setAttribute("download", "zuschnitt_projekt.json");
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+    };
+
     // Zuschnitt-Interface
     document.getElementById('cut-list-section').innerHTML = `
         <div class="bg-white p-8 rounded-xl border border-slate-200 shadow-sm mt-8">
             <h4 class="font-bold text-lg mb-6">Zuschnitte</h4>
-            
             <div class="flex gap-2 mb-6">
                 <button onclick="window.setShape('rect')" data-shape="rect" class="shape-tab flex-1 py-2 rounded-lg border border-slate-200 text-xs font-bold transition-all bg-primary text-white">RECHTECK</button>
                 <button onclick="window.setShape('triangle')" data-shape="triangle" class="shape-tab flex-1 py-2 rounded-lg border border-slate-200 text-xs font-bold transition-all">DREIECK</button>
                 <button onclick="window.setShape('trapezoid')" data-shape="trapezoid" class="shape-tab flex-1 py-2 rounded-lg border border-slate-200 text-xs font-bold transition-all">TRAPEZ</button>
             </div>
-
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 items-end">
                 <div class="col-span-2">
                     <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Bezeichnung</label>
@@ -327,11 +324,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     <input id="cut-qty" type="number" value="1" class="w-full border-slate-200 rounded-lg text-sm p-3">
                 </div>
             </div>
-            
-            <button id="add-cut-btn" class="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-black transition-all shadow-md mt-2">
-                TEIL HINZUFÜGEN
-            </button>
-            
+            <button id="add-cut-btn" class="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-black transition-all shadow-md mt-2">TEIL HINZUFÜGEN</button>
             <div id="cut-display-list" class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-3"></div>
         </div>
     `;
@@ -346,7 +339,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (l > 0 && w > 0) {
             state.cuts.push({ name, l, w, l2, qty, shape: state.activeShape });
             renderCuts(); window.calculate();
-            document.getElementById('cut-name').value = ''; // Reset name
+            document.getElementById('cut-name').value = ''; 
         }
     };
 
@@ -357,11 +350,15 @@ document.addEventListener("DOMContentLoaded", () => {
                     <p class="text-sm font-bold">${c.qty}x ${c.name}</p>
                     <p class="text-[10px] text-slate-500 uppercase">${c.shape} | ${c.l}x${c.w}${c.l2 ? ' (Top:'+c.l2+')' : ''}</p>
                 </div>
-                <button onclick="state.cuts.splice(${i}, 1); renderCuts(); window.calculate();" class="text-error font-bold p-2">✕</button>
+                <button onclick="state.cuts.splice(${i}, 1); renderCuts(); window.calculate();" class="text-error font-bold p-2 hover:bg-red-50 rounded">✕</button>
             </div>
         `).join('');
     }
 
-    // Start UI
+    // Button Binding Fix
+    document.getElementById('add-sheet-btn').addEventListener('click', window.addSheet);
+
+    // Initiales Setup
     window.addSheet();
+    state.hasChanges = false; // Reset nach initialem Laden
 });
