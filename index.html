@@ -13,54 +13,35 @@
         h1, h2, h3, .font-headline { font-family: 'Manrope', sans-serif; }
         input[type=number]::-webkit-inner-spin-button, 
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        .canvas-container canvas { max-width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
     </style>
     <script id="tailwind-config">
         tailwind.config = {
             theme: {
                 extend: {
-                    colors: {
-                        "primary": "#00478d",
-                        "primary-container": "#005eb8",
-                        "on-primary": "#ffffff",
-                        "surface": "#f6fafe",
-                        "on-surface": "#171c1f",
-                        "outline-variant": "#c2c6d4",
-                        "error": "#ba1a1a",
-                        "surface-container-low": "#f0f4f8",
-                        "surface-container-lowest": "#ffffff"
-                    }
+                    colors: { primary: "#00478d", error: "#ba1a1a" }
                 }
             }
         }
     </script>
 </head>
-<body class="bg-surface text-on-surface flex min-h-screen overflow-hidden">
+<body class="bg-slate-50 text-slate-900 flex min-h-screen overflow-hidden">
 
     <aside class="fixed left-0 top-0 h-full flex flex-col py-4 bg-slate-100 w-64 border-r z-40">
         <div class="px-6 mb-8">
             <h1 class="text-lg font-bold text-primary font-headline">OptiCut Pro</h1>
-            <div class="mt-4 flex items-center gap-3 bg-white p-3 rounded-xl shadow-sm">
-                <div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center text-white">
+            <div class="mt-4 flex items-center gap-3 bg-white p-3 rounded-xl shadow-sm border border-slate-200">
+                <div class="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-white">
                     <span class="material-symbols-outlined">architecture</span>
                 </div>
                 <div>
-                    <p class="text-sm font-bold">Project Alpha-24</p>
-                    <p class="text-[10px] text-slate-500 uppercase">Materialoptimierung</p>
+                    <p class="text-sm font-bold">Zuschnitt</p>
+                    <p class="text-[10px] text-slate-500 uppercase">Multi-Optimierung</p>
                 </div>
             </div>
         </div>
-        <nav class="flex-1 space-y-1">
-            <a class="flex items-center gap-3 px-6 py-3 bg-white text-primary shadow-sm rounded-l-lg ml-2 font-medium text-sm" href="#">
-                <span class="material-symbols-outlined">inventory_2</span><span>Material</span>
-            </a>
-            <a class="flex items-center gap-3 px-6 py-3 text-slate-600 hover:text-primary transition-colors text-sm" href="#">
-                <span class="material-symbols-outlined">format_list_bulleted</span><span>Zuschnittliste</span>
-            </a>
-        </nav>
         <div class="px-4 mt-auto pt-4 border-t border-slate-200">
-            <button id="new-calc-btn" class="w-full bg-slate-200 text-slate-700 py-2.5 rounded-md text-sm font-bold mb-4 active:scale-95 transition-all hover:bg-slate-300">
-                New Calculation
+            <button id="new-calc-btn" class="w-full bg-slate-200 text-slate-700 py-2.5 rounded-md text-sm font-bold mb-4 hover:bg-slate-300">
+                Neues Projekt
             </button>
         </div>
     </aside>
@@ -68,38 +49,20 @@
     <main class="ml-64 flex-1 flex flex-col h-screen overflow-y-auto">
         <header class="sticky top-0 z-30 flex justify-between items-center w-full px-8 h-16 bg-white border-b border-slate-200 shrink-0">
             <h2 class="text-xl font-black text-primary font-headline uppercase">Konfiguration</h2>
-            <div class="flex items-center gap-4">
-                <button id="export-btn" class="flex items-center gap-2 border border-slate-300 px-4 py-2 rounded-md font-bold text-sm hover:bg-slate-50 transition-all">
-                    <span class="material-symbols-outlined text-sm">download</span> EXPORT
-                </button>
-                <div class="w-8 h-8 rounded-full bg-slate-200 border-2 border-primary-container"></div>
-            </div>
         </header>
 
-        <div class="p-8 max-w-6xl mx-auto w-full">
-            <div class="mb-10">
-                <span class="text-xs font-bold text-slate-500 tracking-widest uppercase">Phase 01 — Setup</span>
-                <h3 class="text-4xl font-extrabold mt-2">Material & Zuschnitte</h3>
-            </div>
-
+        <div class="p-8 max-w-7xl mx-auto w-full">
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 <div class="lg:col-span-8 space-y-8">
-                    <div id="sheet-container" class="space-y-4">
-                        </div>
-
-                    <button id="add-sheet-btn" class="w-full border-2 border-dashed border-slate-300 hover:border-primary hover:bg-primary/5 transition-all py-6 rounded-xl flex items-center justify-center gap-3 text-slate-500 hover:text-primary group">
-                        <span class="material-symbols-outlined">add_circle</span>
-                        <span class="font-bold text-sm">Weiteres Plattenformat hinzufügen</span>
+                    <div id="sheet-container" class="space-y-4"></div>
+                    <button id="add-sheet-btn" class="w-full border-2 border-dashed border-slate-300 hover:border-primary hover:bg-primary/5 transition-all py-6 rounded-xl flex items-center justify-center gap-3 text-slate-500 hover:text-primary font-bold text-sm">
+                        <span class="material-symbols-outlined">add_circle</span> Weiteres Plattenformat hinzufügen
                     </button>
-
-                    <div id="cut-list-section">
-                        <script src="app.js"></script>
-                        </div>
-
+                    
+                    <div id="cut-list-section"></div>
+                    
                     <div id="results-canvas-container" class="space-y-6 pt-10 border-t border-slate-200 hidden">
-                        <div class="flex justify-between items-center">
-                            <h4 class="text-2xl font-bold font-headline">Optimierter Schnittplan</h4>
-                        </div>
+                        <h4 class="text-2xl font-bold font-headline">Optimierter Schnittplan</h4>
                         <div id="canvas-list" class="space-y-8"></div>
                     </div>
                 </div>
@@ -107,33 +70,22 @@
                 <div class="lg:col-span-4 space-y-6">
                     <div class="sticky top-24">
                         <div class="bg-primary text-white p-6 rounded-xl shadow-lg mb-6">
-                            <h5 class="font-bold text-xs uppercase opacity-80 mb-4">Live-Status (Automatisch)</h5>
+                            <h5 class="font-bold text-xs uppercase opacity-80 mb-4">Materialbedarf</h5>
                             <div class="flex items-end gap-2">
                                 <span id="stat-sheets-count" class="text-4xl font-black font-headline">0</span>
-                                <span class="text-sm font-bold opacity-80 mb-1.5">Platten benötigt</span>
+                                <span class="text-sm font-bold opacity-80 mb-1.5">Platten gesamt</span>
                             </div>
-                            <div class="mt-4 pt-4 border-t border-white/10 flex justify-between text-[10px] font-bold uppercase">
-                                <span>Verschnittanteil</span>
-                                <span id="stat-waste-percent">0 %</span>
-                            </div>
-                            <div class="mt-2 flex justify-between text-[10px] font-bold uppercase">
-                                <span>Gesamtfläche</span>
+                            <div class="mt-4 flex justify-between text-[10px] font-bold uppercase">
+                                <span>Verbaute Fläche</span>
                                 <span id="stat-total-area">0.00 m²</span>
                             </div>
-                        </div>
-
-                        <div class="bg-slate-100 p-6 rounded-xl border border-slate-200">
-                            <h5 class="font-bold text-sm mb-4">Hinweise</h5>
-                            <ul class="text-xs text-slate-600 space-y-2 list-disc ml-4">
-                                <li>Die Berechnung erfolgt <b>automatisch</b> bei jeder Änderung.</li>
-                                <li>Plattennamen werden in der Liste automatisch nummeriert.</li>
-                                <li>Die Vorschau zeigt die Namen der Zuschnitte direkt auf der Fläche an.</li>
-                            </ul>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </main>
+
+    <script src="app.js"></script>
 </body>
 </html>
