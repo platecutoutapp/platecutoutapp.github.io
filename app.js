@@ -2,7 +2,8 @@
 const state = {
     sheets: [], 
     cuts: [],   
-    results: null
+    results: null,
+    activeShape: 'rect' // 'rect', 'triangle', 'trapezoid'
 };
 
 /* =========================   UI TEMPLATES   ========================= */
@@ -11,43 +12,31 @@ function createSheetHTML(index) {
     const letter = String.fromCharCode(65 + index);
     return `
     <section class="sheet-card bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6" data-index="${index}">
-        <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center justify-between mb-4">
             <div class="flex items-center gap-3">
                 <span class="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm">${index + 1}</span>
                 <h4 class="font-headline font-bold text-lg">Plattenformat ${letter}</h4>
             </div>
-            <button onclick="window.removeSheet(${index})" class="text-error flex items-center gap-1 text-sm font-medium hover:opacity-80 transition-opacity">
-                <span class="material-symbols-outlined text-lg">delete</span> Entfernen
+            <button onclick="window.removeSheet(${index})" class="text-error hover:bg-red-50 p-2 rounded-lg transition-colors">
+                <span class="material-symbols-outlined">delete</span>
             </button>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="md:col-span-2 border-b border-slate-100 pb-4">
-                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Bezeichnung</label>
-                <input class="sheet-name w-full bg-transparent border-none focus:ring-0 text-on-surface font-medium p-0 text-lg" 
-                       type="text" value="Standardformat ${letter}" oninput="window.calculate()"/>
-            </div>
+        <div class="grid grid-cols-2 gap-4">
             <div>
-                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Länge (mm)</label>
-                <input class="sheet-l w-full bg-slate-50 border-none rounded p-2 text-primary font-bold text-xl" 
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Länge (mm)</label>
+                <input class="sheet-l w-full bg-slate-50 border-none rounded-lg p-3 text-primary font-bold text-lg focus:ring-2 focus:ring-primary/20" 
                        type="number" value="2500" oninput="window.calculate()"/>
             </div>
             <div>
-                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Breite (mm)</label>
-                <input class="sheet-w w-full bg-slate-50 border-none rounded p-2 text-primary font-bold text-xl" 
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Breite (mm)</label>
+                <input class="sheet-w w-full bg-slate-50 border-none rounded-lg p-3 text-primary font-bold text-lg focus:ring-2 focus:ring-primary/20" 
                        type="number" value="1250" oninput="window.calculate()"/>
-            </div>
-            <div class="flex items-center justify-between md:col-span-2 pt-2">
-                <span class="text-xs font-medium text-slate-500">Maserung beachten</span>
-                <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" class="sheet-grain sr-only peer" checked onchange="window.calculate()">
-                    <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-primary after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                </label>
             </div>
         </div>
     </section>`;
 }
 
-/* =========================   GLOBALE FUNKTIONEN   ========================= */
+/* =========================   CORE LOGIC   ========================= */
 
 window.addSheet = function() {
     const container = document.getElementById('sheet-container');
@@ -61,16 +50,29 @@ window.addSheet = function() {
 window.removeSheet = function(index) {
     const container = document.getElementById('sheet-container');
     if (container.querySelectorAll('.sheet-card').length <= 1) return alert("Ein Format muss bleiben!");
-    const card = container.querySelector(`.sheet-card[data-index="${index}"]`);
-    if (card) card.remove();
-    
-    // Indizes neu ordnen
-    container.querySelectorAll('.sheet-card').forEach((card, i) => {
-        card.setAttribute('data-index', i);
-        card.querySelector('.w-8.h-8').textContent = i + 1;
-        card.querySelector('h4').textContent = `Plattenformat ${String.fromCharCode(65 + i)}`;
-    });
+    container.querySelector(`.sheet-card[data-index="${index}"]`).remove();
     window.calculate();
+};
+
+// Wechselt die Eingabemasken für die Formen
+window.setShape = function(shape) {
+    state.activeShape = shape;
+    document.querySelectorAll('.shape-tab').forEach(btn => {
+        btn.classList.toggle('bg-primary', btn.dataset.shape === shape);
+        btn.classList.toggle('text-white', btn.dataset.shape === shape);
+    });
+    
+    const extraFields = document.getElementById('extra-fields');
+    if (shape === 'trapezoid') {
+        extraFields.innerHTML = `
+            <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Obere Breite (mm)</label>
+                <input id="cut-l2" type="number" placeholder="L2" class="w-full border-slate-200 rounded-lg text-sm p-3">
+            </div>
+        `;
+    } else {
+        extraFields.innerHTML = '';
+    }
 };
 
 window.calculate = function() {
@@ -78,16 +80,14 @@ window.calculate = function() {
     state.sheets = Array.from(cards).map(card => ({
         l: parseFloat(card.querySelector('.sheet-l').value) || 0,
         w: parseFloat(card.querySelector('.sheet-w').value) || 0,
-        grain: card.querySelector('.sheet-grain').checked
     }));
 
     if (state.cuts.length === 0) {
         document.getElementById('results-canvas-container').classList.add('hidden');
-        updateStats(0, 0);
         return;
     }
 
-    // Zuschnitte sortieren
+    // Packing Algorithm (Simplified Bounding Box Packing)
     let remainingCuts = [];
     state.cuts.forEach(c => {
         for(let i=0; i<c.qty; i++) remainingCuts.push({ ...c });
@@ -95,7 +95,7 @@ window.calculate = function() {
     remainingCuts.sort((a, b) => (b.l * b.w) - (a.l * a.w));
 
     let usedSheets = [];
-    const sheetDef = state.sheets[0]; // Nutzt das erste Format als Basis
+    const sheetDef = state.sheets[0] || {l: 2500, w: 1250};
 
     while (remainingCuts.length > 0) {
         let placed = [];
@@ -103,27 +103,22 @@ window.calculate = function() {
 
         for (let i = 0; i < remainingCuts.length; i++) {
             let cut = remainingCuts[i];
-            let fits = false, fw = cut.l, fh = cut.w;
-
             for (let j = 0; j < freeRects.length; j++) {
                 let fr = freeRects[j];
-                if (fw <= fr.w && fh <= fr.h) fits = true;
-                else if (!sheetDef.grain && fh <= fr.w && fw <= fr.h) { fits = true; [fw, fh] = [fh, fw]; }
-
-                if (fits) {
-                    placed.push({ ...cut, x: fr.x, y: fr.y, pw: fw, ph: fh });
+                if (cut.l <= fr.w && cut.w <= fr.h) {
+                    placed.push({ ...cut, x: fr.x, y: fr.y });
                     freeRects.splice(j, 1);
-                    if (fr.w - fw > 0) freeRects.push({ x: fr.x + fw, y: fr.y, w: fr.w - fw, h: fh });
-                    if (fr.h - fh > 0) freeRects.push({ x: fr.x, y: fr.y + fh, w: fr.w, h: fr.h - fh });
-                    remainingCuts.splice(i, 1); i--; break;
+                    if (fr.w - cut.l > 0) freeRects.push({ x: fr.x + cut.l, y: fr.y, w: fr.w - cut.l, h: cut.w });
+                    if (fr.h - cut.w > 0) freeRects.push({ x: fr.x, y: fr.y + cut.w, w: fr.w, h: fr.h - cut.w });
+                    remainingCuts.splice(i, 1);
+                    i--; break;
                 }
             }
         }
         if (placed.length === 0) break;
         usedSheets.push({ placements: placed });
     }
-
-    state.results = { usedSheets, totalArea: (usedSheets.length * sheetDef.l * sheetDef.w) / 1000000 };
+    state.results = { usedSheets };
     renderResults();
 };
 
@@ -135,83 +130,146 @@ function renderResults() {
 
     state.results.usedSheets.forEach((data, i) => {
         const wrap = document.createElement('div');
-        wrap.className = "bg-white p-4 rounded-xl border border-slate-200 shadow-sm";
-        wrap.innerHTML = `<p class="text-[10px] font-black text-primary mb-2 uppercase tracking-widest">PLATTE #${i+1}</p>`;
+        wrap.className = "bg-white p-4 rounded-xl border border-slate-200 shadow-sm max-w-full overflow-hidden";
+        wrap.innerHTML = `<p class="text-[10px] font-black text-primary mb-3 uppercase tracking-tighter">Platte #${i+1} (${state.sheets[0].l}x${state.sheets[0].w}mm)</p>`;
         
         const canvas = document.createElement('canvas');
+        canvas.className = "w-full h-auto block mx-auto"; // Zentriert den Plan
         const ctx = canvas.getContext('2d');
-        const scale = 1200 / state.sheets[0].l;
-        canvas.width = 1200;
+        
+        // Skalierung: Wir berechnen die Breite basierend auf der Container-Anzeige
+        const displayWidth = 1600; 
+        const scale = displayWidth / state.sheets[0].l;
+        canvas.width = displayWidth;
         canvas.height = state.sheets[0].w * scale;
 
-        ctx.fillStyle = "#f1f5f9";
+        // Hintergrund
+        ctx.fillStyle = "#f8fafc";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         data.placements.forEach(p => {
+            const x = p.x * scale;
+            const y = p.y * scale;
+            const w = p.l * scale;
+            const h = p.w * scale;
+
+            ctx.beginPath();
             ctx.fillStyle = "#00478d";
             ctx.strokeStyle = "white";
             ctx.lineWidth = 2;
-            ctx.fillRect(p.x * scale, p.y * scale, p.pw * scale, p.ph * scale);
-            ctx.strokeRect(p.x * scale, p.y * scale, p.pw * scale, p.ph * scale);
-            
+
+            if (p.shape === 'rect') {
+                ctx.rect(x, y, w, h);
+            } else if (p.shape === 'triangle') {
+                ctx.moveTo(x, y + h);
+                ctx.lineTo(x + w, y + h);
+                ctx.lineTo(x, y);
+                ctx.closePath();
+            } else if (p.shape === 'trapezoid') {
+                const w2 = (p.l2 || p.l * 0.6) * scale;
+                ctx.moveTo(x, y + h);
+                ctx.lineTo(x + w, y + h);
+                ctx.lineTo(x + w2, y);
+                ctx.lineTo(x, y);
+                ctx.closePath();
+            }
+
+            ctx.fill();
+            ctx.stroke();
+
+            // Moderne, zentrierte Beschriftung
             ctx.fillStyle = "white";
-            ctx.font = "bold 14px sans-serif";
-            if (p.pw * scale > 60) ctx.fillText(p.name, (p.x + 5) * scale, (p.y + 20) * scale);
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.font = "bold 16px Inter, sans-serif";
+            
+            // Nur zeichnen wenn Platz ist
+            if (w > 40) {
+                ctx.fillText(p.name, x + w/2, y + h/2);
+            }
         });
         wrap.appendChild(canvas);
         list.appendChild(wrap);
     });
-    updateStats(state.results.usedSheets.length, state.results.totalArea);
+    
+    document.getElementById('stat-sheets-count').innerText = state.results.usedSheets.length;
+    document.getElementById('stat-total-area').innerText = (state.results.usedSheets.length * state.sheets[0].l * state.sheets[0].w / 1000000).toFixed(2) + " m²";
 }
 
-function updateStats(count, area) {
-    document.getElementById('stat-sheets-count').innerText = count;
-    document.getElementById('stat-total-area').innerText = area.toFixed(2) + " m²";
-}
-
-/* =========================   INITIALISIERUNG   ========================= */
+/* =========================   INIT   ========================= */
 
 document.addEventListener("DOMContentLoaded", () => {
-    // 1. Zuschnitt-UI einfügen
+    // Neues Zuschnitt-Interface
     document.getElementById('cut-list-section').innerHTML = `
-        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mt-8">
-            <h4 class="font-bold mb-4">Zuschnitte hinzufügen</h4>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                <input id="cut-name" type="text" placeholder="Name" class="border-slate-200 rounded text-sm">
-                <input id="cut-l" type="number" placeholder="Länge" class="border-slate-200 rounded text-sm">
-                <input id="cut-w" type="number" placeholder="Breite" class="border-slate-200 rounded text-sm">
-                <input id="cut-qty" type="number" value="1" class="border-slate-200 rounded text-sm">
+        <div class="bg-white p-8 rounded-xl border border-slate-200 shadow-sm mt-8">
+            <h4 class="font-bold text-lg mb-6">Zuschnitte</h4>
+            
+            <div class="flex gap-2 mb-6">
+                <button onclick="window.setShape('rect')" data-shape="rect" class="shape-tab flex-1 py-2 rounded-lg border border-slate-200 text-xs font-bold transition-all bg-primary text-white">RECHTECK</button>
+                <button onclick="window.setShape('triangle')" data-shape="triangle" class="shape-tab flex-1 py-2 rounded-lg border border-slate-200 text-xs font-bold transition-all">DREIECK</button>
+                <button onclick="window.setShape('trapezoid')" data-shape="trapezoid" class="shape-tab flex-1 py-2 rounded-lg border border-slate-200 text-xs font-bold transition-all">TRAPEZ</button>
             </div>
-            <button id="add-cut-btn" class="w-full bg-slate-800 text-white py-2 rounded-lg font-bold hover:bg-black">TEIL HINZUFÜGEN</button>
-            <div id="cut-display-list" class="mt-4 space-y-2"></div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div class="col-span-2">
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Bezeichnung</label>
+                    <input id="cut-name" type="text" placeholder="z.B. Frontblende" class="w-full border-slate-200 rounded-lg text-sm p-3 focus:ring-primary">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Länge (mm)</label>
+                    <input id="cut-l" type="number" placeholder="L" class="w-full border-slate-200 rounded-lg text-sm p-3">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Breite (mm)</label>
+                    <input id="cut-w" type="number" placeholder="B" class="w-full border-slate-200 rounded-lg text-sm p-3">
+                </div>
+                <div id="extra-fields" class="col-span-2 md:col-span-1"></div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Anzahl</label>
+                    <input id="cut-qty" type="number" value="1" class="w-full border-slate-200 rounded-lg text-sm p-3">
+                </div>
+            </div>
+            
+            <button id="add-cut-btn" class="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-black transition-all shadow-md active:scale-[0.98]">
+                TEIL HINZUFÜGEN
+            </button>
+            
+            <div id="cut-display-list" class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-2"></div>
         </div>
     `;
 
-    // 2. Event Listener für Zuschnitte
     document.getElementById('add-cut-btn').onclick = () => {
         const l = parseFloat(document.getElementById('cut-l').value);
         const w = parseFloat(document.getElementById('cut-w').value);
+        const l2 = document.getElementById('cut-l2') ? parseFloat(document.getElementById('cut-l2').value) : null;
         const qty = parseInt(document.getElementById('cut-qty').value);
         const name = document.getElementById('cut-name').value || `Teil ${state.cuts.length + 1}`;
+        
         if (l > 0 && w > 0) {
-            state.cuts.push({ name, l, w, qty });
+            state.cuts.push({ name, l, w, l2, qty, shape: state.activeShape });
             renderCuts();
             window.calculate();
+            document.getElementById('cut-name').value = '';
         }
     };
 
     function renderCuts() {
         document.getElementById('cut-display-list').innerHTML = state.cuts.map((c, i) => `
-            <div class="flex justify-between bg-slate-50 p-2 rounded border text-sm">
-                <span>${c.qty}x ${c.name} (${c.l}x${c.w}mm)</span>
-                <button onclick="state.cuts.splice(${i}, 1); document.getElementById('add-cut-btn').click(); window.calculate();" class="text-error">Löschen</button>
+            <div class="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-100 group">
+                <div class="flex items-center gap-3">
+                    <div class="w-2 h-2 rounded-full bg-primary"></div>
+                    <div>
+                        <p class="text-sm font-bold">${c.qty}x ${c.name}</p>
+                        <p class="text-[10px] text-slate-400 uppercase">${c.shape} — ${c.l} x ${c.w} mm</p>
+                    </div>
+                </div>
+                <button onclick="state.cuts.splice(${i}, 1); renderCuts(); window.calculate();" class="text-error opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span class="material-symbols-outlined text-sm">close</span>
+                </button>
             </div>
         `).join('');
     }
 
-    // 3. Initialisierung & Sidebar-Buttons
     window.addSheet();
     document.getElementById('add-sheet-btn').onclick = window.addSheet;
-    document.getElementById('new-calc-btn').onclick = () => location.reload();
-    document.getElementById('export-btn').onclick = () => alert("JSON Export bereit!");
 });
