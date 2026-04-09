@@ -1,0 +1,69 @@
+{
+  "sheets": [
+    {
+      "name": "Format A",
+      "l": 2500,
+      "w": 1250,
+      "canRotate": true
+    },
+    {
+      "name": "Format B",
+      "l": 2000,
+      "w": 1000,
+      "canRotate": true
+    }
+  ],
+  "cuts": [
+    {
+      "name": "Frontblende",
+      "l": 800,
+      "w": 600,
+      "l2": null,
+      "qty": 2,
+      "shape": "rect"
+    },
+    {
+      "name": "Seitenpanel",
+      "l": 1200,
+      "w": 400,
+      "l2": null,
+      "qty": 4,
+      "shape": "rect"
+    },
+    {
+      "name": "Rückwand",
+      "l": 1200,
+      "w": 800,
+      "l2": null,
+      "qty": 1,
+      "shape": "rect"
+    },
+    {
+      "name": "Dreieck-Zuschnitt",
+      "l": 500,
+      "w": 400,
+      "l2": null,
+      "qty": 3,
+      "shape": "triangle"
+    },
+    {
+      "name": "Trapez-Zuschnitt",
+      "l": 800,
+      "w": 400,
+      "l2": 600,
+      "qty": 2,
+      "shape": "trapezoid"
+    }
+  ],
+  "results": null,
+  "activeShape": "rect",
+  "hasChanges": false,
+  "sawBladeThickness": 3,
+  "cuttingMode": "free",
+  "statistics": {
+    "totalArea": 0,
+    "usedArea": 0,
+    "wasteArea": 0,
+    "wastePercent": 0
+  }
+}

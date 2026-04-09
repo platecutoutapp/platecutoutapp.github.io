@@ -13,6 +13,8 @@
         h1, h2, h3, .font-headline { font-family: 'Manrope', sans-serif; }
         input[type=number]::-webkit-inner-spin-button, 
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        select { border: 1px solid #cbd5e1; }
+        select:focus { outline: none; box-shadow: 0 0 0 3px rgba(0, 71, 141, 0.1), 0 0 0 2px #00478d; }
     </style>
     <script id="tailwind-config">
         tailwind.config = {
@@ -46,15 +48,43 @@
         <header class="sticky top-0 z-30 flex justify-between items-center w-full px-8 h-16 bg-white border-b border-slate-200 shrink-0">
             <h2 class="text-xl font-black text-primary font-headline uppercase">Konfiguration</h2>
             <div class="flex items-center gap-4">
-                <button id="export-btn" class="flex items-center gap-2 border border-slate-300 px-4 py-2 rounded-md font-bold text-sm hover:bg-slate-50 transition-all">
-                    <span class="material-symbols-outlined text-sm">download</span> JSON EXPORT
+                <button id="export-json-btn" class="flex items-center gap-2 border border-slate-300 px-4 py-2 rounded-md font-bold text-sm hover:bg-slate-50 transition-all">
+                    <span class="material-symbols-outlined text-sm">download</span> JSON
                 </button>
+                <button id="export-csv-btn" class="flex items-center gap-2 border border-slate-300 px-4 py-2 rounded-md font-bold text-sm hover:bg-slate-50 transition-all">
+                    <span class="material-symbols-outlined text-sm">table_chart</span> CSV
+                </button>
+                <button id="export-pdf-btn" class="flex items-center gap-2 border border-slate-300 px-4 py-2 rounded-md font-bold text-sm hover:bg-slate-50 transition-all">
+                    <span class="material-symbols-outlined text-sm">picture_as_pdf</span> PDF
+                </button>
+                <label id="import-csv-label" class="flex items-center gap-2 border border-slate-300 px-4 py-2 rounded-md font-bold text-sm hover:bg-slate-50 transition-all cursor-pointer">
+                    <span class="material-symbols-outlined text-sm">upload</span> CSV Import
+                    <input id="import-csv" type="file" accept=".csv,.xlsx" style="display:none"/>
+                </label>
             </div>
         </header>
 
         <div class="p-8 max-w-7xl mx-auto w-full">
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 <div class="lg:col-span-8 space-y-8">
+                    <!-- SCHNITTFUGE & ALGORITHMUS KONFIGURATION -->
+                    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <h4 class="font-bold text-lg mb-4">Schnitteinstellungen</h4>
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Sägeblattstärke (mm)</label>
+                                <input id="saw-blade-thickness" type="number" value="3" min="0" max="10" step="0.5" class="w-full border-slate-200 rounded-lg text-sm p-3 focus:ring-primary" onchange="window.updateSawBladeThickness(this.value)"/>
+                            </div>
+                            <div class="col-span-2 md:col-span-1">
+                                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Schnittmodus</label>
+                                <select id="cutting-mode" class="w-full border-slate-200 rounded-lg text-sm p-3 focus:ring-primary" onchange="window.updateCuttingMode(this.value)">
+                                    <option value="free">Freies Verschachteln</option>
+                                    <option value="guillotine">Guillotine-Schnitt</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div id="sheet-container" class="space-y-4"></div>
                     <button id="add-sheet-btn" class="w-full border-2 border-dashed border-slate-300 hover:border-primary hover:bg-primary/5 transition-all py-6 rounded-xl flex items-center justify-center gap-3 text-slate-500 hover:text-primary font-bold text-sm">
                         <span class="material-symbols-outlined">add_circle</span> Weiteres Plattenformat hinzufügen
@@ -74,11 +104,36 @@
                             <h5 class="font-bold text-xs uppercase opacity-80 mb-4">Materialbedarf</h5>
                             <div class="flex items-end gap-2">
                                 <span id="stat-sheets-count" class="text-4xl font-black font-headline">0</span>
-                                <span class="text-sm font-bold opacity-80 mb-1.5">Platten gesamt</span>
+                                <span class="text-sm font-bold opacity-80 mb-1.5">Platten</span>
                             </div>
                             <div class="mt-4 flex justify-between text-[10px] font-bold uppercase">
-                                <span>Verbaute Fläche</span>
+                                <span>Gesamt</span>
                                 <span id="stat-total-area">0.00 m²</span>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                            <h5 class="font-bold text-xs uppercase text-slate-400 mb-3">Flächenstatistiken</h5>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Gesamtfläche:</span>
+                                    <span class="font-bold"><span id="stat-total-area-abs">0.00</span> m²</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Genutzte Fläche:</span>
+                                    <span class="font-bold text-green-600"><span id="stat-used-area">0.00</span> m²</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Verschnittfläche:</span>
+                                    <span class="font-bold text-red-600"><span id="stat-waste-area">0.00</span> m²</span>
+                                </div>
+                                <div class="h-2 bg-slate-200 rounded-full mt-3 overflow-hidden">
+                                    <div id="stat-waste-bar" class="h-full bg-red-500 transition-all" style="width: 0%"></div>
+                                </div>
+                                <div class="flex justify-between text-[10px] text-slate-500">
+                                    <span>Verschnittquote:</span>
+                                    <span id="stat-waste-percent">0.00%</span>
+                                </div>
                             </div>
                         </div>
                     </div>

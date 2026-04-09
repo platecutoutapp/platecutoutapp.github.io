@@ -1,0 +1,11 @@
+Bezeichnung,Form,Länge (mm),Breite (mm),Obere Breite (mm),Anzahl
+Frontblende,rect,800,600,,2
+Seitenpanel,rect,1200,400,,4
+Rückwand,rect,1200,800,,1
+Boden,rect,800,400,,1
+Deckel,rect,800,600,,1
+Dreieck1,triangle,500,400,,3
+Dreieck2,triangle,600,500,,2
+Trapez1,trapezoid,800,400,600,2
+Trapez2,trapezoid,700,350,550,1
+Kleine_Leiste,rect,150,100,,8
