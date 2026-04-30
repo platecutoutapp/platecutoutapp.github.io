@@ -255,224 +255,319 @@ window.exportPDF = function() {
     }
 };
 
-/* =========================   ALGORITHMUS (Multi-Bin & Pairing) ========================= */
-
-/* Guillotine-Schnitt Algorithmus */
-function packGuillotine(rect, sheets, sawThickness) {
-    let usedSheets = [];
-    let remainingRects = [...rect];
-    
-    while(remainingRects.length > 0) {
-        let bestRun = {efficiency: -1, placed: [], remaining: [], sheet: null};
-        
-        for(let sheet of sheets) {
-            let placed = [];
-            let freeRects = [{x: 0, y: 0, w: sheet.l, h: sheet.w}];
-            let areaUsed = 0;
-            let currentRemaining = [...remainingRects];
-            
-            // Sortiere nach Größe absteigend
-            currentRemaining.sort((a,b) => b.area - a.area);
-            
-            for(let i = 0; i < currentRemaining.length; i++) {
-                let rect = currentRemaining[i];
-                let placed_here = false;
-                
-                for(let j = 0; j < freeRects.length; j++) {
-                    let fr = freeRects[j];
-                    let actualW = rect.l + sawThickness;
-                    let actualH = rect.w + sawThickness;
-                    
-                    if(actualW <= fr.w && actualH <= fr.h) {
-                        placed.push({...rect, x: fr.x, y: fr.y, pw: rect.l, ph: rect.w});
-                        areaUsed += rect.area;
-                        
-                        // Split: teile in zwei größere Rechtecke (nicht mehrere)
-                        let newRects = [];
-                        // Vertikal spalten
-                        if(fr.w - actualW > 0) {
-                            newRects.push({x: fr.x + actualW, y: fr.y, w: fr.w - actualW, h: fr.h});
-                        }
-                        // Horizontal spalten
-                        if(fr.h - actualH > 0) {
-                            newRects.push({x: fr.x, y: fr.y + actualH, w: actualW, h: fr.h - actualH});
-                        }
-                        
-                        freeRects.splice(j, 1);
-                        freeRects.push(...newRects);
-                        currentRemaining.splice(i, 1);
-                        i--;
-                        placed_here = true;
-                        break;
-                    }
-                }
-            }
-            
-            let efficiency = areaUsed / (sheet.l * sheet.w);
-            if(placed.length > 0 && efficiency > bestRun.efficiency) {
-                bestRun = {efficiency, placed, remaining: currentRemaining, sheet};
-            }
-        }
-        
-        if(bestRun.placed.length === 0) break;
-        usedSheets.push({sheet: bestRun.sheet, placements: bestRun.placed});
-        remainingRects = bestRun.remaining;
-    }
-    
-    return usedSheets;
-}
-
-/* Verbesserter freier Packing-Algorithmus */
+// =============================================================================
+// CUTTING OPTIMIZER — 2D Bin Packing
+// Schnittstellen: preprocessCuts(), packGuillotine(), window.calculate()
+// =============================================================================
+ 
+ 
+// -----------------------------------------------------------------------------
+// PREPROCESSING — Schnitte vorbereiten und Formen paaren
+// -----------------------------------------------------------------------------
+ 
 function preprocessCuts(cuts) {
-    let pool = [];
-    cuts.forEach(c => { for(let i=0; i<c.qty; i++) pool.push({...c, id: Math.random()}); });
-
-    let rectsToPack = [];
-
-    // Dreiecke paaren
-    let triangles = pool.filter(c => c.shape === 'triangle');
-    pool = pool.filter(c => c.shape !== 'triangle');
-    while(triangles.length > 0) {
-        let t1 = triangles.shift();
-        let matchIdx = triangles.findIndex(t2 => t2.l === t1.l && t2.w === t1.w);
-        if (matchIdx !== -1) {
-            let t2 = triangles.splice(matchIdx, 1)[0];
-            rectsToPack.push({ isPair: true, type: 'triangle', l: t1.l, w: t1.w, area: t1.l*t1.w, items: [t1, t2] });
-        } else {
-            rectsToPack.push({ isPair: false, type: 'triangle', l: t1.l, w: t1.w, area: (t1.l*t1.w)/2, items: [t1] });
-        }
+  // Alle Einzelstücke expandieren (qty → Kopien)
+  const pool = [];
+  cuts.forEach(c => {
+    for (let i = 0; i < c.qty; i++) pool.push({ ...c, id: Math.random() });
+  });
+ 
+  const rectsToPack = [];
+ 
+  // Hilfsfunktion: gleiche Formen paaren (zwei Dreiecke/Trapeze → ein Rechteck)
+  function pairShapes(shapes, isMatch, makePair, makeSingle) {
+    while (shapes.length > 0) {
+      const a = shapes.shift();
+      const idx = shapes.findIndex(b => isMatch(a, b));
+      if (idx !== -1) {
+        rectsToPack.push(makePair(a, shapes.splice(idx, 1)[0]));
+      } else {
+        rectsToPack.push(makeSingle(a));
+      }
     }
-
-    // Trapeze paaren
-    let trapezoids = pool.filter(c => c.shape === 'trapezoid');
-    pool = pool.filter(c => c.shape !== 'trapezoid');
-    while(trapezoids.length > 0) {
-        let t1 = trapezoids.shift();
-        let matchIdx = trapezoids.findIndex(t2 => t2.l === t1.l && t2.w === t1.w && t2.l2 === t1.l2);
-        if (matchIdx !== -1) {
-            let t2 = trapezoids.splice(matchIdx, 1)[0];
-            let combinedL = t1.l + (t1.l2 || 0);
-            rectsToPack.push({ isPair: true, type: 'trapezoid', l: combinedL, w: t1.w, area: combinedL*t1.w, items: [t1, t2] });
-        } else {
-            rectsToPack.push({ isPair: false, type: 'trapezoid', l: t1.l, w: t1.w, area: t1.l*t1.w, items: [t1] });
-        }
-    }
-
-    pool.forEach(r => rectsToPack.push({ isPair: false, type: 'rect', l: r.l, w: r.w, area: r.l*r.w, items: [r] }));
-    return rectsToPack.sort((a,b) => b.area - a.area);
+  }
+ 
+  // Dreiecke: zwei gleiche Dreiecke → ein Rechteck
+  pairShapes(
+    pool.filter(c => c.shape === 'triangle'),
+    (a, b) => a.l === b.l && a.w === b.w,
+    (a, b) => ({ isPair: true,  type: 'triangle',  l: a.l, w: a.w, area: a.l * a.w,          items: [a, b] }),
+    (a)    => ({ isPair: false, type: 'triangle',  l: a.l, w: a.w, area: (a.l * a.w) / 2,    items: [a]    })
+  );
+ 
+  // Trapeze: zwei gleiche Trapeze → ein Rechteck
+  pairShapes(
+    pool.filter(c => c.shape === 'trapezoid'),
+    (a, b) => a.l === b.l && a.w === b.w && a.l2 === b.l2,
+    (a, b) => {
+      const combinedL = a.l + (a.l2 || 0);
+      return { isPair: true, type: 'trapezoid', l: combinedL, w: a.w, area: combinedL * a.w, items: [a, b] };
+    },
+    (a) => ({ isPair: false, type: 'trapezoid', l: a.l, w: a.w, area: a.l * a.w, items: [a] })
+  );
+ 
+  // Rechtecke direkt übernehmen
+  pool
+    .filter(c => c.shape !== 'triangle' && c.shape !== 'trapezoid')
+    .forEach(r => rectsToPack.push({ isPair: false, type: 'rect', l: r.l, w: r.w, area: r.l * r.w, items: [r] }));
+ 
+  // Größte Teile zuerst (verbessert die Packdichte erheblich)
+  return rectsToPack.sort((a, b) => b.area - a.area);
 }
-
-window.calculate = function() {
-    state.hasChanges = true;
-    state.sheets = Array.from(document.querySelectorAll('.sheet-card')).map(card => ({
-        name: card.querySelector('.sheet-name').value,
-        l: parseFloat(card.querySelector('.sheet-l').value) || 0,
-        w: parseFloat(card.querySelector('.sheet-w').value) || 0,
-        canRotate: card.querySelector('.sheet-grain').checked
-    })).filter(s => s.l > 0 && s.w > 0);
-
-    if (state.cuts.length === 0 || state.sheets.length === 0) {
-        document.getElementById('results-canvas-container').classList.add('hidden');
-        updateStatistics();
-        return;
+ 
+ 
+// -----------------------------------------------------------------------------
+// GUILLOTINE-ALGORITHMUS
+// Strategie: Best Short Side Fit + Longer Axis Split + optionale Rotation
+// -----------------------------------------------------------------------------
+ 
+function packGuillotine(rects, sheets, sawThickness) {
+  const usedSheets = [];
+  let remaining = [...rects];
+ 
+  while (remaining.length > 0) {
+    let best = { score: -Infinity, placed: [], remaining: null, sheet: null };
+ 
+    for (const sheet of sheets) {
+      const result = _guillotinePackSheet(remaining, sheet, sawThickness);
+      // Priorität: möglichst viele Teile platzieren, dann Effizienz
+      const score = result.placed.length * 10000 + result.efficiency;
+      if (result.placed.length > 0 && score > best.score) {
+        best = { score, sheet, ...result };
+      }
     }
-
-    let remainingRects = preprocessCuts(state.cuts);
-    let usedSheets = [];
-
-    if(state.cuttingMode === 'guillotine') {
-        usedSheets = packGuillotine(remainingRects, state.sheets, state.sawBladeThickness);
-    } else {
-        // Freier Packing-Modus - OPTIMIERT FÜR VOLLSTÄNDIGE PLATTENAUSNUTZUNG
-        while (remainingRects.length > 0) {
-            let bestRun = { efficiency: -1, placed: [], remaining: [], sheet: null };
-
-            for (let sheet of state.sheets) {
-                let currentRemaining = [...remainingRects];
-                let placed = [];
-                let freeSpace = [{ x: 0, y: 0, w: sheet.l, h: sheet.w }];
-                let areaUsed = 0;
-
-                for (let i = 0; i < currentRemaining.length; i++) {
-                    let rect = currentRemaining[i];
-                    let fits = false, fw = rect.l, fh = rect.w, rotated = false;
-
-                    // Sortiere freie Räume (beste Anpassung zuerst - größte Räume mit ähnlichen Proportionen)
-                    freeSpace.sort((a,b) => {
-                        // Räume die passen, nach "Verschwendung" sortieren (weniger Leerraum = besser)
-                        let wasteA = (a.w - fw) + (a.h - fh);
-                        let wasteB = (b.w - fw) + (b.h - fh);
-                        return wasteA - wasteB;
-                    });
-
-                    for (let j = 0; j < freeSpace.length; j++) {
-                        let fr = freeSpace[j];
-                        if (fw + state.sawBladeThickness <= fr.w && fh + state.sawBladeThickness <= fr.h) { 
-                            fits = true; 
-                        } 
-                        else if (sheet.canRotate && fh + state.sawBladeThickness <= fr.w && fw + state.sawBladeThickness <= fr.h) { 
-                            fits = true; [fw, fh] = [fh, fw]; rotated = true; 
-                        }
-
-                        if (fits) {
-                            placed.push({ ...rect, x: fr.x, y: fr.y, pw: fw, ph: fh, rotatedBox: rotated });
-                            freeSpace.splice(j, 1);
-                            
-                            // Restraum aufteilen OPTIMIERT: Erzeuge maximal 2 neue Räume für bessere Packung
-                            let rightSpace = fr.w - fw - state.sawBladeThickness;
-                            let bottomSpace = fr.h - fh - state.sawBladeThickness;
-                            
-                            // Größerer Raum zuerst hinzufügen
-                            if (rightSpace > 0 && bottomSpace > 0) {
-                                if (rightSpace * fr.h > bottomSpace * fw) {
-                                    freeSpace.push({ x: fr.x + fw + state.sawBladeThickness, y: fr.y, w: rightSpace, h: fr.h });
-                                    freeSpace.push({ x: fr.x, y: fr.y + fh + state.sawBladeThickness, w: fw, h: bottomSpace });
-                                } else {
-                                    freeSpace.push({ x: fr.x, y: fr.y + fh + state.sawBladeThickness, w: fr.w, h: bottomSpace });
-                                    freeSpace.push({ x: fr.x + fw + state.sawBladeThickness, y: fr.y, w: rightSpace, h: fh });
-                                }
-                            } else {
-                                if (rightSpace > 0) 
-                                    freeSpace.push({ x: fr.x + fw + state.sawBladeThickness, y: fr.y, w: rightSpace, h: fr.h });
-                                if (bottomSpace > 0) 
-                                    freeSpace.push({ x: fr.x, y: fr.y + fh + state.sawBladeThickness, w: fr.w, h: bottomSpace });
-                            }
-                            
-                            // NEU: Wenn es ein ungerades Dreieck ist, nutze das leere "Gegen-Dreieck"
-                            if (rect.type === 'triangle' && !rect.isPair) {
-                                let subW = fw / 2;
-                                let subH = fh / 2;
-                                if(!rotated) {
-                                    freeSpace.push({ x: fr.x + subW, y: fr.y, w: subW, h: subH });
-                                } else {
-                                    freeSpace.push({ x: fr.x + subW, y: fr.y + subH, w: subW, h: subH });
-                                }
-                            }
-
-                            areaUsed += rect.area;
-                            currentRemaining.splice(i, 1);
-                            i--;
-                            break;
-                        }
-                    }
-                }
-
-                let efficiency = areaUsed / (sheet.l * sheet.w);
-                // WICHTIG: Bevorzuge Blätter mit höherer Effizienz, aber akzeptiere auch Blätter mit mehr platzierten Teilen
-                if (placed.length > bestRun.placed.length || (placed.length === bestRun.placed.length && efficiency > bestRun.efficiency)) {
-                    bestRun = { efficiency, placed, remaining: currentRemaining, sheet };
-                }
-            }
-
-            if (bestRun.placed.length === 0) break; // Endlosschleife verhindern
-            usedSheets.push({ sheet: bestRun.sheet, placements: bestRun.placed });
-            remainingRects = bestRun.remaining;
-        }
+ 
+    if (best.placed.length === 0) break; // Kein Teil passt mehr → Abbruch
+    usedSheets.push({ sheet: best.sheet, placements: best.placed });
+    remaining = best.remaining;
+  }
+ 
+  return usedSheets;
+}
+ 
+function _guillotinePackSheet(rects, sheet, sw) {
+  let freeRects = [{ x: 0, y: 0, w: sheet.l, h: sheet.w }];
+  const placed = [];
+  let areaUsed = 0;
+  const remaining = [...rects].sort((a, b) => b.area - a.area);
+ 
+  for (let i = 0; i < remaining.length; i++) {
+    const rect = remaining[i];
+    let best = null; // { frIdx, fw, fh, rotated, score }
+ 
+    for (let j = 0; j < freeRects.length; j++) {
+      const fr = freeRects[j];
+ 
+      // Normale Orientierung prüfen
+      if (rect.l + sw <= fr.w && rect.w + sw <= fr.h) {
+        const score = _shortSideScore(fr, rect.l, rect.w, sw);
+        if (!best || score < best.score)
+          best = { frIdx: j, fw: rect.l, fh: rect.w, rotated: false, score };
+      }
+ 
+      // Gedrehte Orientierung prüfen (90°, nur wenn erlaubt und sinnvoll)
+      if (sheet.canRotate && rect.l !== rect.w && rect.w + sw <= fr.w && rect.l + sw <= fr.h) {
+        const score = _shortSideScore(fr, rect.w, rect.l, sw);
+        if (!best || score < best.score)
+          best = { frIdx: j, fw: rect.w, fh: rect.l, rotated: true, score };
+      }
     }
-
-    state.results = { usedSheets };
-    renderResults();
+ 
+    if (best) {
+      const fr = freeRects[best.frIdx];
+      placed.push({ ...rect, x: fr.x, y: fr.y, pw: best.fw, ph: best.fh, rotatedBox: best.rotated });
+      areaUsed += rect.area;
+ 
+      // Freies Rechteck aufteilen und ersetzen
+      const splits = _guillotineSplit(fr, best.fw, best.fh, sw);
+      freeRects.splice(best.frIdx, 1, ...splits);
+ 
+      remaining.splice(i, 1);
+      i--;
+    }
+  }
+ 
+  return { placed, remaining, efficiency: areaUsed / (sheet.l * sheet.w) };
+}
+ 
+// Score: je kleiner, desto besser passend (minimiert die kürzere Restseite)
+function _shortSideScore(fr, fw, fh, sw) {
+  return Math.min(fr.w - fw - sw, fr.h - fh - sw);
+}
+ 
+// "Longer Axis"-Split: Splitte entlang der längeren Restseite → größere freie Flächen
+function _guillotineSplit(fr, fw, fh, sw) {
+  const rightW  = fr.w - fw - sw;
+  const bottomH = fr.h - fh - sw;
+  const result  = [];
+ 
+  if (rightW > bottomH) {
+    // Rechter Streifen über volle Höhe, unterer Streifen begrenzt
+    if (rightW  > 0) result.push({ x: fr.x + fw + sw, y: fr.y,        w: rightW, h: fr.h    });
+    if (bottomH > 0) result.push({ x: fr.x,           y: fr.y + fh + sw, w: fw,     h: bottomH });
+  } else {
+    // Unterer Streifen über volle Breite, rechter Streifen begrenzt
+    if (bottomH > 0) result.push({ x: fr.x,           y: fr.y + fh + sw, w: fr.w,   h: bottomH });
+    if (rightW  > 0) result.push({ x: fr.x + fw + sw, y: fr.y,        w: rightW, h: fh      });
+  }
+ 
+  return result;
+}
+ 
+ 
+// -----------------------------------------------------------------------------
+// MAXIMAL-RECTANGLES-ALGORITHMUS (freier Packing-Modus)
+// Deutlich bessere Packdichte als einfaches Guillotine-Split-Packing,
+// weil alle möglichen freien Rechtecke verwaltet werden (nicht nur zwei).
+// Strategie: Best Short Side Fit (BSSF) + optionale Rotation
+// -----------------------------------------------------------------------------
+ 
+function _packMaxRects(rects, sheets, sawThickness) {
+  const usedSheets = [];
+  let remaining = [...rects];
+ 
+  while (remaining.length > 0) {
+    let best = { score: -Infinity, placed: [], remaining: null, sheet: null };
+ 
+    for (const sheet of sheets) {
+      const result = _maxRectsPackSheet(remaining, sheet, sawThickness);
+      const score = result.placed.length * 10000 + result.efficiency;
+      if (result.placed.length > 0 && score > best.score) {
+        best = { score, sheet, ...result };
+      }
+    }
+ 
+    if (best.placed.length === 0) break;
+    usedSheets.push({ sheet: best.sheet, placements: best.placed });
+    remaining = best.remaining;
+  }
+ 
+  return usedSheets;
+}
+ 
+function _maxRectsPackSheet(rects, sheet, sw) {
+  let freeRects = [{ x: 0, y: 0, w: sheet.l, h: sheet.w }];
+  const placed = [];
+  let areaUsed = 0;
+  const remaining = [...rects].sort((a, b) => b.area - a.area);
+ 
+  for (let i = 0; i < remaining.length; i++) {
+    const rect = remaining[i];
+    let best = null; // { frIdx, fw, fh, rotated, score }
+ 
+    for (let j = 0; j < freeRects.length; j++) {
+      const fr = freeRects[j];
+ 
+      if (rect.l + sw <= fr.w && rect.w + sw <= fr.h) {
+        const score = Math.min(fr.w - rect.l - sw, fr.h - rect.w - sw);
+        if (!best || score < best.score)
+          best = { frIdx: j, fw: rect.l, fh: rect.w, rotated: false, score };
+      }
+ 
+      if (sheet.canRotate && rect.l !== rect.w && rect.w + sw <= fr.w && rect.l + sw <= fr.h) {
+        const score = Math.min(fr.w - rect.w - sw, fr.h - rect.l - sw);
+        if (!best || score < best.score)
+          best = { frIdx: j, fw: rect.w, fh: rect.l, rotated: true, score };
+      }
+    }
+ 
+    if (best) {
+      const fr = freeRects[best.frIdx];
+      // Das platzierte Rechteck inkl. Sägeblatt (für Kollisionsberechnung)
+      const occupiedRect = { x: fr.x, y: fr.y, w: best.fw + sw, h: best.fh + sw };
+ 
+      placed.push({ ...rect, x: fr.x, y: fr.y, pw: best.fw, ph: best.fh, rotatedBox: best.rotated });
+      areaUsed += rect.area;
+ 
+      // Alle freien Rechtecke anhand des platzierten Stücks aufteilen
+      freeRects = _splitFreeRects(freeRects, occupiedRect);
+      // Enthaltene (redundante) freie Rechtecke entfernen
+      freeRects = _pruneContained(freeRects);
+ 
+      remaining.splice(i, 1);
+      i--;
+    }
+  }
+ 
+  return { placed, remaining, efficiency: areaUsed / (sheet.l * sheet.w) };
+}
+ 
+// Alle freien Rechtecke, die das platzierte Stück überschneiden, in max. 4 Teile zerlegen
+function _splitFreeRects(freeRects, placed) {
+  const result = [];
+ 
+  for (const fr of freeRects) {
+    if (!_overlaps(fr, placed)) {
+      result.push(fr); // Keine Überschneidung → unverändert übernehmen
+      continue;
+    }
+    // Links vom platzierten Stück
+    if (placed.x > fr.x)
+      result.push({ x: fr.x, y: fr.y, w: placed.x - fr.x, h: fr.h });
+    // Rechts vom platzierten Stück
+    if (placed.x + placed.w < fr.x + fr.w)
+      result.push({ x: placed.x + placed.w, y: fr.y, w: fr.x + fr.w - placed.x - placed.w, h: fr.h });
+    // Oberhalb des platzierten Stücks
+    if (placed.y > fr.y)
+      result.push({ x: fr.x, y: fr.y, w: fr.w, h: placed.y - fr.y });
+    // Unterhalb des platzierten Stücks
+    if (placed.y + placed.h < fr.y + fr.h)
+      result.push({ x: fr.x, y: placed.y + placed.h, w: fr.w, h: fr.y + fr.h - placed.y - placed.h });
+  }
+ 
+  return result;
+}
+ 
+function _overlaps(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x &&
+         a.y < b.y + b.h && a.y + a.h > b.y;
+}
+ 
+// Rechtecke entfernen, die vollständig in einem anderen enthalten sind
+function _pruneContained(freeRects) {
+  return freeRects.filter((a, i) =>
+    !freeRects.some((b, j) => i !== j && _contains(b, a))
+  );
+}
+ 
+function _contains(outer, inner) {
+  return outer.x <= inner.x && outer.y <= inner.y &&
+         outer.x + outer.w >= inner.x + inner.w &&
+         outer.y + outer.h >= inner.y + inner.h;
+}
+ 
+ 
+// -----------------------------------------------------------------------------
+// HAUPTFUNKTION
+// -----------------------------------------------------------------------------
+ 
+window.calculate = function () {
+  state.hasChanges = true;
+ 
+  // Platten aus dem UI auslesen
+  state.sheets = Array.from(document.querySelectorAll('.sheet-card')).map(card => ({
+    name:      card.querySelector('.sheet-name').value,
+    l:         parseFloat(card.querySelector('.sheet-l').value) || 0,
+    w:         parseFloat(card.querySelector('.sheet-w').value) || 0,
+    canRotate: card.querySelector('.sheet-grain').checked,
+  })).filter(s => s.l > 0 && s.w > 0);
+ 
+  if (state.cuts.length === 0 || state.sheets.length === 0) {
+    document.getElementById('results-canvas-container').classList.add('hidden');
     updateStatistics();
+    return;
+  }
+ 
+  const rects = preprocessCuts(state.cuts);
+  const sw    = state.sawBladeThickness;
+ 
+  const usedSheets = state.cuttingMode === 'guillotine'
+    ? packGuillotine(rects, state.sheets, sw)
+    : _packMaxRects(rects, state.sheets, sw);
+ 
+  state.results = { usedSheets };
+  renderResults();
+  updateStatistics();
 };
 
 function updateStatistics() {
